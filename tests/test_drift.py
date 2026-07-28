@@ -20,7 +20,7 @@ def test_countdown_displays_each_second(
         return original_get_number_lines(seconds)
 
     monkeypatch.setattr(__main__, "get_number_lines", tracking_get_number_lines)
-    result = runner.invoke(__main__.main, ["5s"])
+    result = runner.invoke(__main__.main, ["timer", "5s"])
     assert result.exit_code == 0
     assert displayed_times == [5, 4, 3, 2, 1, 0]
 
@@ -48,7 +48,7 @@ def test_drift_correction_with_slow_sleeps(
         return original_get_number_lines(seconds)
 
     monkeypatch.setattr(__main__, "get_number_lines", tracking_get_number_lines)
-    result = runner.invoke(__main__.main, ["5s"])
+    result = runner.invoke(__main__.main, ["timer", "5s"])
     assert result.exit_code == 0
 
     # Even with drift, we should still display 5 seconds counting down
@@ -78,7 +78,7 @@ def test_drift_correction_skips_seconds_when_very_slow(
         return original_get_number_lines(seconds)
 
     monkeypatch.setattr(__main__, "get_number_lines", tracking_get_number_lines)
-    result = runner.invoke(__main__.main, ["60m"])
+    result = runner.invoke(__main__.main, ["timer", "60m"])
     assert result.exit_code == 0
 
     # Timer should still start at 60m and count down
@@ -126,7 +126,7 @@ def test_pause_preserves_remaining_time(
     monkeypatch.setattr(__main__, "read_key", fake_read_key)
     monkeypatch.setattr(__main__, "drain_keypresses", fake_drain)
 
-    result = runner.invoke(__main__.main, ["3s"])
+    result = runner.invoke(__main__.main, ["timer", "3s"])
     assert result.exit_code == 0
 
     # Despite pausing, all countdown seconds should still be displayed
@@ -168,7 +168,7 @@ def test_add_time_extends_deadline(
     monkeypatch.setattr(__main__, "read_key", fake_read_key)
     monkeypatch.setattr(__main__, "drain_keypresses", fake_drain)
 
-    result = runner.invoke(__main__.main, ["10s"])
+    result = runner.invoke(__main__.main, ["timer", "10s"])
     assert result.exit_code == 0
 
     # After pressing + on display of 10, n jumps to 40 (10+30)
@@ -210,7 +210,7 @@ def test_subtract_time_shortens_deadline(
     monkeypatch.setattr(__main__, "read_key", fake_read_key)
     monkeypatch.setattr(__main__, "drain_keypresses", fake_drain)
 
-    result = runner.invoke(__main__.main, ["1m"])
+    result = runner.invoke(__main__.main, ["timer", "1m"])
     assert result.exit_code == 0
 
     # After pressing - on display of 60, n drops to 30 (60-30)

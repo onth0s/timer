@@ -14,6 +14,9 @@ CLEAR = "\033[H\033[J"
 
 # ANSI color codes
 INTENSE_MAGENTA = "\x1b[95m"
+BRIGHT_WHITE = "\x1b[97m"
+BOLD = "\x1b[1m"
+DIM = "\x1b[2m"
 RESET = "\033[0m"
 
 

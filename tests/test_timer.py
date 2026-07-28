@@ -15,7 +15,19 @@ def join_lines(lines):
 
 def test_invalid_duration():
     with pytest.raises(ValueError):
-        timer.duration("10")
+        timer.duration("abc")
+
+
+def test_duration_bare_seconds():
+    assert timer.duration("10") == 10
+
+
+def test_duration_bare_seconds_zero():
+    assert timer.duration("0") == 0
+
+
+def test_duration_bare_seconds_large():
+    assert timer.duration("120") == 120
 
 
 def test_duration_10_seconds():

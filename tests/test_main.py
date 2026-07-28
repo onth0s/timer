@@ -20,8 +20,8 @@ def test_main_with_no_arguments(runner):
     # Should show help (not error)
     assert result.exit_code == 0
     assert "Usage:" in result.output
-    assert "DURATION" in result.output
-    assert "5m" in result.output  # Should show examples
+    assert "config" in result.output  # config subcommand listed
+    assert "timer" in result.output  # timer subcommand listed
 
 
 def test_version_works(runner):
@@ -34,7 +34,7 @@ def test_version_works(runner):
 def test_main_3_seconds(runner, fake_terminal_size, fake_clock):
     # Use 40x20 terminal to select size 5 digits (33w <= 40, 5h+2 <= 20)
     fake_terminal_size(40, 20)
-    result = runner.invoke(__main__.main, ["3s"])
+    result = runner.invoke(__main__.main, ["timer", "3s"])
     assert result.exit_code == 0
     assert clean_main_output(result.stdout) == (
         "\n\n\n\n\n\n\n"
@@ -74,7 +74,7 @@ def test_main_1_minute(runner, fake_terminal_size, fake_clock):
     # Raise exception after 11 seconds of fake sleep
     fake_clock.raises = {11: SystemExit(0)}
 
-    result = runner.invoke(__main__.main, ["1m"])
+    result = runner.invoke(__main__.main, ["timer", "1m"])
     assert clean_main_output(result.stdout) == (
         "\n\n"
         "   ██████   ██        ██████ ██████\n"
@@ -151,7 +151,7 @@ def test_main_10_minutes_has_600_clear_screens(
     fake_clock,
 ):
     fake_terminal_size(32, 10)
-    result = runner.invoke(__main__.main, ["10m"])
+    result = runner.invoke(__main__.main, ["timer", "10m"])
     # 10 minutes = 600 seconds + 1 to display 00:00
     assert fake_clock.slept == pytest.approx(10 * 60 + 1, abs=0.1)
     assert fake_clock.elapsed == pytest.approx(10 * 60 + 1, abs=0.1)
@@ -164,7 +164,7 @@ def test_main_enables_alt_buffer_and_hides_cursor_at_beginning(
     fake_clock,
 ):
     fake_terminal_size(32, 10)
-    result = runner.invoke(__main__.main, ["5m"])
+    result = runner.invoke(__main__.main, ["timer", "5m"])
     assert result.stdout.startswith("\033[?1049h\033[?25l")
 
 
@@ -174,7 +174,7 @@ def test_main_disable_alt_buffer_and_show_cursor_at_end(
     fake_clock,
 ):
     fake_terminal_size(32, 10)
-    result = runner.invoke(__main__.main, ["5m"])
+    result = runner.invoke(__main__.main, ["timer", "5m"])
     assert result.stdout.endswith("\033[?25h\033[?1049l")
 
 
@@ -189,7 +189,7 @@ def test_main_early_exit_still_shows_cursor_at_end(
     # Hit Ctrl+C after 4 seconds total sleep time (chunked sleep)
     fake_clock.raises = {4: KeyboardInterrupt()}
 
-    result = runner.invoke(__main__.main, ["15m"])
+    result = runner.invoke(__main__.main, ["timer", "15m"])
     # 4 iterations x 6 newlines each (2 padding + 4 between 5 content lines)
     # = 24 newlines, no trailing newline (end=""), so splitlines() gives 25
     assert len(result.stdout.splitlines()) == 25
@@ -230,7 +230,7 @@ def test_pause_key_triggers_pause(
     monkeypatch.setattr(__main__, "read_key", fake_read_key)
     monkeypatch.setattr(__main__, "drain_keypresses", fake_drain)
 
-    result = runner.invoke(__main__.main, ["5s"])
+    result = runner.invoke(__main__.main, ["timer", "5s"])
 
     # The pause key should have been detected and read
     assert pause_key_detected[0], "Pause key detection should have been called"
@@ -268,7 +268,7 @@ def test_non_pause_key_ignored(
     monkeypatch.setattr(__main__, "check_for_keypress", fake_check_for_keypress)
     monkeypatch.setattr(__main__, "read_key", fake_read_key)
 
-    result = runner.invoke(__main__.main, ["5s"])
+    result = runner.invoke(__main__.main, ["timer", "5s"])
 
     # The key should have been read
     assert read_key_called[0], "read_key should have been called"
@@ -315,7 +315,7 @@ def test_sleep_exits_early_on_keypress(
     monkeypatch.setattr(__main__, "read_key", fake_read_key)
     monkeypatch.setattr(__main__, "drain_keypresses", fake_drain)
 
-    result = runner.invoke(__main__.main, ["10s"])
+    result = runner.invoke(__main__.main, ["timer", "10s"])
     assert result.exit_code == 0, result.output
 
     # Should have broken out of sleep loop early
@@ -379,7 +379,7 @@ def test_resume_from_pause_exits_early(
     monkeypatch.setattr(__main__, "drain_keypresses", fake_drain)
     monkeypatch.setattr(__main__, "print_full_screen", tracking_print)
 
-    result = runner.invoke(__main__.main, ["10s"])
+    result = runner.invoke(__main__.main, ["timer", "10s"])
     assert result.exit_code == 0, result.output
 
     # Should have some paused sleeps (0.05) and some regular chunked sleeps (0.05)
@@ -420,7 +420,7 @@ def test_add_time_with_plus_key(
     monkeypatch.setattr(__main__, "read_key", fake_read_key)
     monkeypatch.setattr(__main__, "drain_keypresses", fake_drain)
 
-    result = runner.invoke(__main__.main, ["1m"])
+    result = runner.invoke(__main__.main, ["timer", "1m"])
     assert result.exit_code == 0, result.output
 
     # Should have displayed 60s initially, then 90s after pressing +
@@ -461,7 +461,7 @@ def test_subtract_time_with_minus_key(
     monkeypatch.setattr(__main__, "read_key", fake_read_key)
     monkeypatch.setattr(__main__, "drain_keypresses", fake_drain)
 
-    result = runner.invoke(__main__.main, ["1m"])
+    result = runner.invoke(__main__.main, ["timer", "1m"])
     assert result.exit_code == 0, result.output
 
     # Should have displayed 60s initially, then 30s after pressing -
@@ -502,7 +502,7 @@ def test_subtract_time_cannot_go_negative(
     monkeypatch.setattr(__main__, "read_key", fake_read_key)
     monkeypatch.setattr(__main__, "drain_keypresses", fake_drain)
 
-    result = runner.invoke(__main__.main, ["10s"])
+    result = runner.invoke(__main__.main, ["timer", "10s"])
     assert result.exit_code == 0, result.output
 
     # Should have displayed 10s initially, then 0s (not -20s) after pressing -
@@ -531,7 +531,7 @@ def test_q_key_quits_timer(runner, fake_terminal_size, fake_clock, monkeypatch):
     monkeypatch.setattr(__main__, "check_for_keypress", fake_check_for_keypress)
     monkeypatch.setattr(__main__, "read_key", fake_read_key)
 
-    result = runner.invoke(__main__.main, ["10m"])
+    result = runner.invoke(__main__.main, ["timer", "10m"])
 
     # Should exit cleanly with code 0
     assert result.exit_code == 0
@@ -545,8 +545,132 @@ def test_no_arguments_shows_help(runner):
 
     # Should exit with code 0 (not an error)
     assert result.exit_code == 0
-    # Should show usage information
+    # Should show usage information with subcommands
     assert "Usage:" in result.output
-    assert "DURATION" in result.output
-    # Should show examples
-    assert "5m" in result.output or "Examples" in result.output
+    assert "config" in result.output
+    assert "timer" in result.output
+
+
+def test_bare_duration_forwards_to_timer_subcommand(
+    runner, fake_terminal_size, fake_clock
+):
+    """`timer 3s` (no explicit subcommand) still runs the countdown."""
+    fake_terminal_size(40, 20)
+    result = runner.invoke(__main__.main, ["3s"])
+    assert result.exit_code == 0
+
+
+def test_bare_invalid_duration_reports_error(runner):
+    """`timer bogus` shows error, not 'no such command'."""
+    result = runner.invoke(__main__.main, ["bogus"])
+    assert result.exit_code != 0
+    # Error should mention the bad value, not "no such command"
+    output = result.output + (result.stderr or "")
+    assert "bogus" in output
+    assert "no such command" not in output.lower()
+
+
+# ============================================================================
+# Config subcommand tests
+# ============================================================================
+
+
+def test_config_init_creates_file(runner, tmp_config):
+    """Timer config init writes default config.yaml."""
+    from countdown.config import Config
+
+    result = runner.invoke(__main__.main, ["config", "init"])
+    assert result.exit_code == 0
+    assert tmp_config.exists()
+    loaded = Config.load()
+    assert loaded.get("anim") == "rich"
+
+
+def test_config_init_when_already_exists(runner, tmp_config):
+    """Timer config init overwrites with defaults (idempotent)."""
+    tmp_config.write_text("anim: drawille\n")
+
+    result = runner.invoke(__main__.main, ["config", "init"])
+    assert result.exit_code == 0
+    from countdown.config import Config
+
+    loaded = Config.load()
+    assert loaded.get("anim") == "rich"  # overwritten to default
+
+
+def test_config_path_prints_path(runner, tmp_config):
+    """Timer config path prints the config file path."""
+    result = runner.invoke(__main__.main, ["config", "path"])
+    assert result.exit_code == 0
+    assert str(tmp_config) in result.output
+
+
+def test_config_show_prints_table(runner, tmp_config):
+    """Timer config show prints current config."""
+    tmp_config.write_text("anim: drawille\n")
+    result = runner.invoke(__main__.main, ["config", "show"])
+    assert result.exit_code == 0
+    assert "anim" in result.output
+    assert "drawille" in result.output
+
+
+def test_config_anim_with_no_arg_shows_current(runner, tmp_config):
+    """Timer config anim (no arg) prints current mode."""
+    tmp_config.write_text("anim: drawille\n")
+    result = runner.invoke(__main__.main, ["config", "anim"])
+    assert result.exit_code == 0
+    assert "drawille" in result.output
+
+
+def test_config_anim_persists_valid_mode(runner, tmp_config):
+    """Timer config anim <MODE> persists the mode to disk."""
+    from countdown.config import Config
+
+    result = runner.invoke(__main__.main, ["config", "anim", "drawille"])
+    assert result.exit_code == 0
+    assert tmp_config.exists()
+    loaded = Config.load()
+    assert loaded.get("anim") == "drawille"
+
+
+def test_config_anim_rejects_invalid_mode(runner, tmp_config):
+    """Timer config anim <INVALID> exits non-zero with helpful error."""
+    from countdown.pulses import VALID_ANIM_MODES
+
+    result = runner.invoke(__main__.main, ["config", "anim", "neon-rave"])
+    assert result.exit_code != 0
+    assert "neon-rave" in result.output
+    for mode in VALID_ANIM_MODES:
+        assert mode in result.output
+    # Should NOT have created/written the file
+    assert not tmp_config.exists()
+
+
+def test_timer_subcommand_invalid_anim_exits_error(runner, tmp_config):
+    """Timer --anim INVALID exits non-zero listing valid modes."""
+    from countdown.pulses import VALID_ANIM_MODES
+
+    result = runner.invoke(__main__.main, ["timer", "--anim", "neon-rave", "3s"])
+    assert result.exit_code != 0
+    output = result.output + (result.stderr or "")
+    assert "neon-rave" in output
+    for mode in VALID_ANIM_MODES:
+        assert mode in output
+
+
+def test_help_uses_rich_styling(runner):
+    """--help output is rendered (rich-click adds markup)."""
+    result = runner.invoke(__main__.main, ["--help"])
+    assert result.exit_code == 0
+    # rich-click may add ANSI markup; we just verify it contains expected text
+    assert "Countdown" in result.output or "countdown" in result.output
+
+
+def test_config_subcommand_help(runner):
+    """Timer config --help lists config subcommands."""
+    result = runner.invoke(__main__.main, ["config", "--help"])
+    assert result.exit_code == 0
+    assert "init" in result.output
+    assert "show" in result.output
+    assert "path" in result.output
+    assert "anim" in result.output

@@ -5,26 +5,29 @@ import re
 DURATION_RE = re.compile(
     r"""
     ^
-    (?:                 # Optional minutes
-        ( \d+ )         # one or more digits
-        m               # "m"
-    )?
-    (?:                 # Optional seconds
-        ( \d+ )         # one or more digits
-        s               # "s"
-    )?
+    (?:
+        (?: (\d+) m )?    # Optional minutes
+        (?: (\d+) s )?    # Optional seconds
+    )
     $
+    |
+    ^ (\d+) $             # Bare number (interpreted as seconds)
 """,
     re.VERBOSE,
 )
 
 
 def duration(string):
-    """Convert given XmXs string to seconds (as an integer)."""
+    """Convert given XmXs or bare number string to seconds (as an integer).
+
+    Bare numbers are interpreted as seconds.
+    """
     match = DURATION_RE.search(string)
     if not match:
         raise ValueError(f"Invalid duration: {string}")
-    minutes, seconds = match.groups()
+    minutes, seconds, bare = match.groups()
+    if bare is not None:
+        return int(bare)
     return int(minutes or 0) * 60 + int(seconds or 0)
 
 
