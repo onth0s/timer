@@ -52,8 +52,10 @@ def get_number_lines(seconds, chars):
     lines = [""] * digit_height
     minutes, seconds = divmod(seconds, 60)
     time = f"{minutes:02d}:{seconds:02d}"
-    for char in time:
+    for j, char in enumerate(time):
         char_lines = chars[char].splitlines()
         for i, line in enumerate(char_lines):
-            lines[i] += line + " "
-    return [line.rstrip() for line in lines] if lines else lines
+            if j > 0:
+                lines[i] += " "
+            lines[i] += line
+    return lines
