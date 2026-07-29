@@ -6,6 +6,16 @@ import pytest
 from _pytest.assertion import truncate
 from click.testing import CliRunner
 
+
+def pytest_addoption(parser):
+    """Register --run-map-viz to enable the visual centering map test."""
+    parser.addoption(
+        "--run-map-viz",
+        action="store_true",
+        default=False,
+        help="Run the centering map visualisation (skipped by default).",
+    )
+
 truncate.DEFAULT_MAX_LINES = 40
 truncate.DEFAULT_MAX_CHARS = 40 * 80
 

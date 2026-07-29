@@ -5,10 +5,9 @@ outer run_countdown loop handles timing and keypress checks.
 """
 
 import math
-from shutil import get_terminal_size
 from time import time
 
-from ..display import CLEAR
+from ..display import FULL_CLEAR_HOME, HOME, centered_frame, get_terminal_size
 
 # 8 brightness levels cycled by the wave (dim -> bright)
 _INTENSITY_STYLES = [
@@ -25,23 +24,22 @@ _RESET = "\x1b[0m"
 _START = [None]
 
 
-def build_frame(lines, phase):
-    """Render glyphs with per-cell intensity from a radial sine wave.
+def style_lines(lines, phase):
+    """Return styled copies of ``lines`` with per-cell sine-wave intensity.
 
-    Returns the frame as a string with ANSI escape codes (no CLEAR prefix).
+    Uses the visual width of each line (trailing whitespace preserved) as the
+    radial-wave x-axis. The wave's center sits on the visual midpoint of the
+    content box, so the brightest cell is centered on the glyph cluster.
     """
-    term_width, term_height = get_terminal_size()
     content_height = len(lines)
-    vertical_padding = max(0, (term_height - content_height) // 2)
-    max_line_width = max(len(line) for line in lines)
-    horizontal_padding = max(0, (term_width - max_line_width) // 2)
+    content_widths = [len(line.rstrip()) for line in lines]
+    max_width = max(content_widths) if content_widths else 0
 
-    cx = max_line_width / 2
+    cx = max_width / 2
     cy = content_height / 2
 
     body = []
     for y, line in enumerate(lines):
-        prefix = " " * horizontal_padding
         styled = []
         for x, ch in enumerate(line):
             if ch == " ":
@@ -51,10 +49,17 @@ def build_frame(lines, phase):
             level = int((intensity + 1) / 2 * (len(_INTENSITY_STYLES) - 1))
             level = max(0, min(len(_INTENSITY_STYLES) - 1, level))
             styled.append(_INTENSITY_STYLES[level] + ch + _RESET)
-        body.append(prefix + "".join(styled))
+        body.append("".join(styled).rstrip())
+    return body
 
-    vertical_pad = "\n" * vertical_padding
-    return vertical_pad + "\n".join(body)
+
+def build_frame(lines, phase):
+    """Render glyphs with per-cell intensity from a radial sine wave.
+
+    Returns the centered frame as a string (no CLEAR prefix, no HOME suffix).
+    """
+    term_width, term_height = get_terminal_size()
+    return centered_frame(style_lines(lines, phase), term_width, term_height)
 
 
 def pulse_ansi(lines):
@@ -62,7 +67,7 @@ def pulse_ansi(lines):
     if _START[0] is None:
         _START[0] = time()
     phase = (time() - _START[0]) * 3
-    print(CLEAR + build_frame(lines, phase), flush=True, end="")
+    print(FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end="")
 
 
 def reset_state():

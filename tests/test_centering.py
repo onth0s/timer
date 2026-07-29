@@ -20,38 +20,11 @@ from _pytest.assertion import truncate
 
 from countdown import display
 from countdown import timer as timer_mod
+from countdown._map_viz import grid_to_str, make_grid, mark_center, write_lines
 from countdown.digits import CHARS_BY_SIZE
 
 truncate.DEFAULT_MAX_LINES = 60
 truncate.DEFAULT_MAX_CHARS = 60 * 120
-
-# ── 1.  GRID HELPERS ────────────────────────────────────────────────
-# A "grid" is a list[list[str]] where each inner list is one row of the
-# terminal.  Grid helpers operate on this representation so every centering
-# path (string output, Rich objects, ANSI escapes) normalises to the same
-# structure before comparison.
-
-
-def make_grid(w, h):
-    """Return an empty W×H grid filled with spaces."""
-    return [[" " for _ in range(w)] for _ in range(h)]
-
-
-def grid_to_str(grid):
-    r"""Dump a grid to a single string (rows joined by ``\\n``)."""
-    return "\n".join("".join(row) for row in grid)
-
-
-def write_lines(grid, x, y, lines):
-    """Blit *lines* (list of str) onto *grid* at top-left (x, y)."""
-    h = len(grid)
-    w = len(grid[0]) if grid else 0
-    for row_off, line in enumerate(lines):
-        for col_off, ch in enumerate(line):
-            gy = y + row_off
-            gx = x + col_off
-            if 0 <= gy < h and 0 <= gx < w:
-                grid[gy][gx] = ch
 
 
 # ── 2.  OUTPUT → GRID CONVERTERS ────────────────────────────────────
@@ -138,107 +111,6 @@ def grid_from_rich_wave(lines, phase, tw, th):
                 break
             grid[row_idx][col_idx] = ch
     return grid
-
-
-# ── 3.  MAP MARKERS ─────────────────────────────────────────────────
-
-
-def mark_center(grid, ch="+"):
-    """Place *ch* at the center of the terminal (defined by grid dimensions)."""
-    h = len(grid)
-    w = len(grid[0]) if grid else 0
-    cx, cy = max(0, (w - 1) // 2), max(0, (h - 1) // 2)
-    grid[cy][cx] = ch
-    return (cx, cy)
-
-
-def mark_corners(grid, ch="+"):
-    """Place *ch* at the four corners of the terminal."""
-    h = len(grid)
-    w = len(grid[0]) if grid else 0
-    positions = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]
-    for x, y in positions:
-        if 0 <= y < h and 0 <= x < w:
-            grid[y][x] = ch
-
-
-def mark_edge_midpoints(grid, ch="+"):
-    """Place *ch* at the midpoint of each edge."""
-    h = len(grid)
-    w = len(grid[0]) if grid else 0
-    positions = [
-        (w // 2, 0),          # top
-        (w // 2, h - 1),      # bottom
-        (0, h // 2),          # left
-        (w - 1, h // 2),      # right
-    ]
-    for x, y in positions:
-        if 0 <= y < h and 0 <= x < w:
-            grid[y][x] = ch
-
-
-def mark_quadrant_boundaries(grid, ch_v="|", ch_h="-", ch_cross="+"):
-    """Draw quadrant-dividing lines at the center axes."""
-    h = len(grid)
-    w = len(grid[0]) if grid else 0
-    cx, cy = max(0, (w - 1) // 2), max(0, (h - 1) // 2)
-    for y in range(h):
-        if 0 <= cx < w:
-            grid[y][cx] = ch_v
-    for x in range(w):
-        if 0 <= cy < h:
-            grid[cy][x] = ch_h
-    grid[cy][cx] = ch_cross
-
-
-def mark_quadrants(grid, size=1):
-    """Place markers at the centre of each of the 4 quadrants.
-
-    Each quadrant is one half of the full grid split at the centre.
-    *size* controls whether to mark the exact centre cell (1) or a
-    *size*×*size* block.
-    """
-    h = len(grid)
-    w = len(grid[0]) if grid else 0
-    cx, cy = max(0, (w - 1) // 2), max(0, (h - 1) // 2)
-    quadrants = [
-        (0, 0, cx, cy),           # TL:  (0,0) → (cx,cy)
-        (cx + 1, 0, w - 1, cy),   # TR:  (cx+1,0) → (w-1,cy)
-        (0, cy + 1, cx, h - 1),   # BL:  (0,cy+1) → (cx,h-1)
-        (cx + 1, cy + 1, w - 1, h - 1),  # BR
-    ]
-    marks = "1234"
-    for (x0, y0, x1, y1), m in zip(quadrants, marks, strict=False):
-        qcx = max(0, (x1 - x0) // 2)
-        qcy = max(0, (y1 - y0) // 2)
-        mx = x0 + qcx
-        my = y0 + qcy
-        if 0 <= my < h and 0 <= mx < w:
-            grid[my][mx] = m
-
-
-def mark_quadrant_corners(grid):
-    """Place corner markers on each quadrant's inner corners.
-
-    Each quadrant has 4 corners — the four points where the quadrant
-    boundaries intersect.
-    """
-    h = len(grid)
-    w = len(grid[0]) if grid else 0
-    cx, cy = max(0, (w - 1) // 2), max(0, (h - 1) // 2)
-    corners = [
-        # TL quadrant corners
-        (0, 0), (cx, 0), (0, cy), (cx, cy),
-        # TR quadrant corners
-        (cx + 1, 0), (w - 1, 0), (cx + 1, cy), (w - 1, cy),
-        # BL quadrant corners
-        (0, cy + 1), (cx, cy + 1), (0, h - 1), (cx, h - 1),
-        # BR quadrant corners
-        (cx + 1, cy + 1), (w - 1, cy + 1), (cx + 1, h - 1), (w - 1, h - 1),
-    ]
-    for x, y in corners:
-        if 0 <= y < h and 0 <= x < w:
-            grid[y][x] = "o"
 
 
 # ── 4.  ASSERTION HELPER ────────────────────────────────────────────
@@ -478,11 +350,11 @@ class TestRichPulse:
     def test_centered_with_term_width(self, name, tw, th, lines, reason):
         actual = grid_from_rich_wave(lines, 0.0, tw, th)
         expected = make_grid(tw, th)
+        ch = len(lines)
         cw = max(len(x) for x in lines)
         hpad = max(0, (tw - cw) // 2)
-        # Rich build_wave_renderable does NOT apply vertical padding —
-        # only horizontal centering.  Vertical layout is left to Live.
-        write_lines(expected, hpad, 0, lines)
+        vpad = max(0, (th - ch) // 2)
+        write_lines(expected, hpad, vpad, lines)
         assert_grids_equal(actual, expected, f"{name}: {reason}")
 
     @pytest.mark.parametrize("name,tw,th,lines,reason", TEST_CONFIGS)
@@ -606,28 +478,13 @@ class TestEdgeCases:
 # automatically unless --run-map-viz is passed.
 
 
-@pytest.mark.skip(reason="use --run-map-viz to enable")
-def test_visual_map(capsys):
-    """Render the complete centering map for 80×24 and 100×30 terminals.
+def test_visual_map(capsys, pytestconfig):
+    """Render centering maps for visual inspection via pytest.
 
-    The map shows:
-      - 4 corners (+)
-      - centre (+)
-      - quadrant boundaries (--- | cross)
-      - quadrant centres (1 2 3 4)
-      - quadrant sub-corners (o)
-      - edge midpoints (+)
-
-    Pipe the output to a file or `cat` it to inspect.
+    Skipped by default; run with ``--run-map-viz`` to enable.
     """
-    for tw, th in [(80, 24), (100, 30), (40, 10)]:
-        grid = make_grid(tw, th)
-        mark_corners(grid, "+")
-        mark_center(grid, "+")
-        mark_edge_midpoints(grid, "+")
-        mark_quadrant_boundaries(grid, "│", "─", "┼")
-        mark_quadrants(grid)
-        mark_quadrant_corners(grid)
-        print(f"\n═══ {tw}×{th} centering map ═══".center(tw))
-        print(grid_to_str(grid))
-        print()
+    if not pytestconfig.getoption("run_map_viz"):
+        pytest.skip("use --run-map-viz to enable")
+    from countdown.tests_cmd import run_tests_cmd
+
+    run_tests_cmd()

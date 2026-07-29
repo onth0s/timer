@@ -105,41 +105,25 @@ def run_countdown(total_seconds, pulse_fn=None, max_pulses=None):
                 sleep(0.05)
 
         # Pulse phase: animate the zero state until user presses a key.
-        # If pulse_fn returns a renderable, use Rich Live; otherwise pulse_fn
-        # is expected to print directly to stdout.
-        from rich.console import Console
-        from rich.live import Live
+        # All pulse functions print directly (return None) — we just loop
+        # with a small sleep to keep the animation going.
+        #
+        # Asciimatics is special: it manages its own Screen.wrapper loop,
+        # blocks internally, and captures its own keyboard input.  We exit
+        # the alt buffer first so Screen.wrapper starts from a clean state,
+        # then run it once as a one-shot.
+        if getattr(pulse_fn, "__name__", "") == "pulse_asciimatics":
+            print(SHOW_CURSOR + DISABLE_ALT_BUFFER, end="", flush=True)
+            pulse_fn(get_number_lines(0))
+            return
 
         pulse_count = 0
-        renderable = None
-        live = None
-
         while not check_for_keypress():
             if max_pulses is not None and pulse_count >= max_pulses:
                 break
-
-            new_renderable = pulse_fn(get_number_lines(0))
-
-            if new_renderable is not None:
-                if live is None:
-                    console = Console()
-                    live = Live(
-                        console=console,
-                        screen=False,
-                        refresh_per_second=20,
-                        vertical_overflow="visible",
-                    )
-                    live.__enter__()
-                    renderable = new_renderable
-                    live.update(renderable)
-                elif new_renderable is not renderable:
-                    renderable = new_renderable
-                    live.update(renderable)
+            pulse_fn(get_number_lines(0))
             sleep(0.05)
             pulse_count += 1
-
-        if live is not None:
-            live.__exit__(None, None, None)
     except KeyboardInterrupt:
         pass
     finally:
@@ -157,15 +141,15 @@ run_countdown._original = run_countdown  # type: ignore[attr-defined]
 
 
 class SmartGroup(click.Group):
-    """Group that forwards unmatched positional args to the ``timer`` subcommand.
+    """Group that forwards unmatched positional args to the ``run`` subcommand.
 
-    Lets ``timer 5`` work as an alias for ``timer timer 5``.
+    Lets ``timer 5`` work as an alias for ``timer run 5``.
     """
 
     def resolve_command(self, ctx, args):
-        """Route non-subcommand positional args to the timer subcommand."""
+        """Route non-subcommand positional args to the run subcommand."""
         if args and args[0] not in self.commands:
-            return "timer", self.commands["timer"], args
+            return "run", self.commands["run"], args
         return super().resolve_command(ctx, args)
 
 
@@ -178,7 +162,7 @@ def main(ctx):
         click.echo(ctx.get_help())
 
 
-@main.command(name="timer")
+@main.command(name="run")
 @click.option(
     "--anim",
     type=click.Choice(list(VALID_ANIM_MODES)),
@@ -324,6 +308,14 @@ def showcase(time_per_mode, shuffle, once, duration):
     from .showcase import run_showcase
 
     run_showcase(interval, shuffle, once)
+
+
+@main.command()
+def test():
+    """Print a centering geometry map for the current terminal."""
+    from .tests_cmd import run_tests_cmd
+
+    run_tests_cmd()
 
 
 if __name__ == "__main__":

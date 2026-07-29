@@ -5,10 +5,9 @@ oscillates smoothly through 3 levels creating a visible breathing pulse.
 """
 
 import math
-from shutil import get_terminal_size
 from time import time
 
-from ..display import CLEAR
+from ..display import FULL_CLEAR_HOME, HOME, centered_frame, get_terminal_size
 
 _BRIGHTNESS_STYLES = [
     "\x1b[2m",  # dim
@@ -19,23 +18,17 @@ _RESET = "\x1b[0m"
 _START = [None]
 
 
-def build_frame(lines, phase):
-    """Render glyphs with per-cell brightness from a radial sine wave.
-
-    Returns the frame as a string with ANSI escape codes (no CLEAR prefix).
-    """
-    term_width, term_height = get_terminal_size()
+def style_lines(lines, phase):
+    """Return styled copies of ``lines`` with radial-wave brightness per cell."""
     content_height = len(lines)
-    vertical_padding = max(0, (term_height - content_height) // 2)
-    max_line_width = max(len(line) for line in lines)
-    horizontal_padding = max(0, (term_width - max_line_width) // 2)
+    content_widths = [len(line.rstrip()) for line in lines]
+    max_width = max(content_widths) if content_widths else 0
 
-    cx = max_line_width / 2
+    cx = max_width / 2
     cy = content_height / 2
 
     body = []
     for y, line in enumerate(lines):
-        prefix = " " * horizontal_padding
         styled = []
         for x, ch in enumerate(line):
             if ch == " ":
@@ -46,10 +39,17 @@ def build_frame(lines, phase):
             level = int((wave + 1) / 2 * len(_BRIGHTNESS_STYLES))
             level = max(0, min(len(_BRIGHTNESS_STYLES) - 1, level))
             styled.append(_BRIGHTNESS_STYLES[level] + ch + _RESET)
-        body.append(prefix + "".join(styled))
+        body.append("".join(styled).rstrip())
+    return body
 
-    vertical_pad = "\n" * vertical_padding
-    return vertical_pad + "\n".join(body)
+
+def build_frame(lines, phase):
+    """Render glyphs with per-cell brightness from a radial sine wave.
+
+    Returns the centered frame as a string (no CLEAR prefix, no HOME suffix).
+    """
+    term_width, term_height = get_terminal_size()
+    return centered_frame(style_lines(lines, phase), term_width, term_height)
 
 
 def pulse_smooth(lines):
@@ -57,7 +57,7 @@ def pulse_smooth(lines):
     if _START[0] is None:
         _START[0] = time()
     phase = (time() - _START[0]) * 2.5
-    print(CLEAR + build_frame(lines, phase), flush=True, end="")
+    print(FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end="")
 
 
 def reset_state():

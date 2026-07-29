@@ -6,32 +6,25 @@ cells swap to glitch characters per frame to simulate CRT interference.
 
 import math
 import random
-from shutil import get_terminal_size
 from time import time
 
-from ..display import CLEAR
+from ..display import FULL_CLEAR_HOME, HOME, centered_frame, get_terminal_size
 
 _GLITCH_CHARS = "\u2588\u2593\u2592\u2591\u2580#@&$%*"
 _START = [None]
 
 
-def build_frame(lines, phase, glitch_rate=0.08):
-    """Render glyphs with sine-wave brightness + occasional glitch swaps.
-
-    Returns the frame as a string with ANSI escape codes (no CLEAR prefix).
-    """
-    term_width, term_height = get_terminal_size()
+def style_lines(lines, phase, glitch_rate=0.08):
+    """Return styled copies of ``lines`` with sine-wave brightness + glitches."""
     content_height = len(lines)
-    vertical_padding = max(0, (term_height - content_height) // 2)
-    max_line_width = max(len(line) for line in lines)
-    horizontal_padding = max(0, (term_width - max_line_width) // 2)
+    content_widths = [len(line.rstrip()) for line in lines]
+    max_width = max(content_widths) if content_widths else 0
 
-    cx = max_line_width / 2
+    cx = max_width / 2
     cy = content_height / 2
 
     body = []
     for y, line in enumerate(lines):
-        prefix = " " * horizontal_padding
         styled = []
         for x, ch in enumerate(line):
             if ch == " ":
@@ -39,18 +32,28 @@ def build_frame(lines, phase, glitch_rate=0.08):
                 continue
             distance = math.sqrt((x - cx) ** 2 + (y - cy) ** 2)
             wave = math.sin(phase * 4 - distance * 0.6)
-            if random.random() < glitch_rate:
-                ch = random.choice(_GLITCH_CHARS)
+            display_ch = random.choice(_GLITCH_CHARS) if random.random() < glitch_rate else ch
             if wave > 0.3:
-                styled.append(f"\x1b[1m\x1b[95m{ch}\x1b[0m")
+                styled.append(f"\x1b[1m\x1b[95m{display_ch}\x1b[0m")
             elif wave > -0.3:
-                styled.append(f"\x1b[95m{ch}\x1b[0m")
+                styled.append(f"\x1b[95m{display_ch}\x1b[0m")
             else:
-                styled.append(f"\x1b[2m\x1b[35m{ch}\x1b[0m")
-        body.append(prefix + "".join(styled))
+                styled.append(f"\x1b[2m\x1b[35m{display_ch}\x1b[0m")
+        body.append("".join(styled).rstrip())
+    return body
 
-    vertical_pad = "\n" * vertical_padding
-    return vertical_pad + "\n".join(body)
+
+def build_frame(lines, phase, glitch_rate=0.08):
+    """Render glyphs with sine-wave brightness + occasional glitch swaps.
+
+    Returns the centered frame as a string (no CLEAR prefix, no HOME suffix).
+    """
+    term_width, term_height = get_terminal_size()
+    return centered_frame(
+        style_lines(lines, phase, glitch_rate=glitch_rate),
+        term_width,
+        term_height,
+    )
 
 
 def pulse_ghostprint(lines):
@@ -58,7 +61,7 @@ def pulse_ghostprint(lines):
     if _START[0] is None:
         _START[0] = time()
     phase = time() - _START[0]
-    print(CLEAR + build_frame(lines, phase), flush=True, end="")
+    print(FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end="")
 
 
 def reset_state():

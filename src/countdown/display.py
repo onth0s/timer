@@ -1,7 +1,9 @@
 """Visual rendering and ANSI terminal control."""
 
+import os
+import re
 import sys
-from shutil import get_terminal_size
+from shutil import get_terminal_size as _shutil_get_terminal_size
 
 from .digits import CHARS_BY_SIZE, DIGIT_SIZES
 
@@ -11,6 +13,12 @@ DISABLE_ALT_BUFFER = "\033[?1049l"
 HIDE_CURSOR = "\033[?25l"
 SHOW_CURSOR = "\033[?25h"
 CLEAR = "\033[H\033[J"
+HOME = "\033[H"
+
+# Full-screen clear for pulse animations. Clears the entire visible canvas
+# (not just cursor-to-end) and homes the cursor so frames never ghost the
+# previous frame's tail row.
+FULL_CLEAR_HOME = "\033[2J\033[H"
 
 # ANSI color codes
 INTENSE_MAGENTA = "\x1b[95m"
@@ -18,6 +26,85 @@ BRIGHT_WHITE = "\x1b[97m"
 BOLD = "\x1b[1m"
 DIM = "\x1b[2m"
 RESET = "\033[0m"
+
+# Matches all CSI sequences: ESC [ + optional ?/digits/semicolons + final byte.
+_ANSI_CSI_RE = re.compile(r"\033\[[\?]?[\d;]*[A-Za-z]")
+
+
+def get_terminal_size(fallback=(80, 24)):
+    """Return the visible window size (not screen buffer).
+
+    On Windows ``shutil.get_terminal_size()`` returns the *buffer* size, which
+    can be much wider than the visible window (e.g. 209 columns vs 120 columns
+    visible).  This function reads ``GetConsoleScreenBufferInfo.srWindow`` to
+    get the actual visible dimensions and falls back to ``shutil`` elsewhere.
+    """
+    if sys.platform == "win32":
+        try:
+            from ctypes import create_string_buffer, windll
+
+            h = windll.kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+            csbi = create_string_buffer(22)  # sizeof(CONSOLE_SCREEN_BUFFER_INFO)
+            if windll.kernel32.GetConsoleScreenBufferInfo(h, csbi):
+                import struct
+
+                left, top, right, bottom = struct.unpack_from("HHHH", csbi, offset=10)
+                tw = right - left + 1
+                th = bottom - top + 1
+                if tw > 0 and th > 0:
+                    return os.terminal_size((tw, th))
+        except Exception:  # noqa: S110
+            pass
+    return _shutil_get_terminal_size(fallback=fallback)
+
+
+def strip_ansi(text):
+    """Return ``text`` with all ANSI CSI escape sequences removed.
+
+    Used for measuring the visible width of a styled line so that centering
+    math ignores SGR codes and other invisible bytes.
+    """
+    return _ANSI_CSI_RE.sub("", text)
+
+
+def visual_width(line):
+    """Return the visible width of ``line`` after stripping ANSI escapes."""
+    return len(strip_ansi(line))
+
+
+def horizontal_padding(content_lines, term_width):
+    """Return spaces to prepend so content_lines sit centered horizontally."""
+    if not content_lines:
+        return 0
+    widest = max(visual_width(line) for line in content_lines)
+    return max(0, (term_width - widest) // 2)
+
+
+def vertical_padding(content_height, term_height):
+    """Return lines of leading padding so content_height rows sit centered."""
+    return max(0, (term_height - content_height) // 2)
+
+
+def centered_frame(content_lines, term_width, term_height, indent=" "):
+    r"""Return a single string with content_lines centered on the terminal.
+
+    ``content_lines`` is a list of strings (each may contain ANSI escapes).
+    Visible width is computed by stripping ANSI codes. ``indent`` is the
+    character used for horizontal padding (default: space).
+
+    The returned string starts with vertical newlines, has each content line
+    prepended with horizontal-padding characters, and is joined by ``\n``.
+    No trailing newline. Pair with ``FULL_CLEAR_HOME`` for flicker-free frames.
+    """
+    if not content_lines:
+        return ""
+    v_pad = "\n" * vertical_padding(len(content_lines), term_height)
+    h_pad = horizontal_padding(content_lines, term_width) * indent
+    if h_pad:
+        body = "\n".join(f"{h_pad}{line}" for line in content_lines)
+    else:
+        body = "\n".join(content_lines)
+    return f"{v_pad}{body}"
 
 
 def enable_ansi_escape_codes():  # pragma: no cover
@@ -46,13 +133,23 @@ def _format_time_string(seconds):
 
 
 def get_required_width(chars, time_string):
-    """Calculate the minimum width required to display the given time string."""
-    char_widths = {
-        char: max(len(line) for line in glyph.splitlines())
-        for char, glyph in chars.items()
-    }
-    # Each character in the timer output has a trailing space appended
-    return sum(char_widths[char] + 1 for char in time_string)
+    """Calculate the minimum width required to display the given time string.
+
+    Returns the actual rendered width by building ``get_number_lines`` and
+    measuring the widest line, so the check in ``get_chars_for_terminal``
+    exactly matches what ``print_full_screen`` will display.
+    """
+    from . import timer as timer_mod
+
+    seconds = _parse_time_string(time_string)
+    lines = timer_mod.get_number_lines(seconds, chars)
+    return max(len(line) for line in lines) if lines else 0
+
+
+def _parse_time_string(time_string):
+    """Convert an MM:SS string to total seconds."""
+    parts = time_string.split(":")
+    return int(parts[0]) * 60 + int(parts[1])
 
 
 def get_chars_for_terminal(seconds=0):

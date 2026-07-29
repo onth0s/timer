@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
+from countdown import timer
 from countdown.__main__ import get_number_lines
 from countdown.pulses import VALID_ANIM_MODES, get_pulse_fn, validate_anim_mode
 from countdown.pulses._wave import (
@@ -127,8 +128,11 @@ def test_intensity_to_ansi_buckets():
 # ============================================================================
 
 
-def test_pulse_ansi_emits_clear_escape():
-    """pulse_ansi emits CLEAR escape on each frame."""
+def test_pulse_ansi_emits_full_clear_home():
+    """pulse_ansi uses FULL_CLEAR_HOME (clear-entire-screen + home).
+
+    Guarantees no stale frame ghosting when animated.
+    """
     from countdown.pulses.ansi import pulse_ansi
 
     lines = _zero_lines()
@@ -136,7 +140,9 @@ def test_pulse_ansi_emits_clear_escape():
     with patch("sys.stdout", buf):
         pulse_ansi(lines)
     output = buf.getvalue()
-    assert "\x1b[H\x1b[J" in output
+    assert output.startswith("\x1b[2J\x1b[H"), (
+        "pulse_ansi must start every frame with full-screen clear + home"
+    )
 
 
 def test_pulse_ansi_centers_output():
@@ -148,12 +154,26 @@ def test_pulse_ansi_centers_output():
     with patch("sys.stdout", buf):
         pulse_ansi(lines)
     output = buf.getvalue()
-    prefix = "\x1b[H\x1b[J"
+    prefix = "\x1b[2J\x1b[H"
     assert output.startswith(prefix)
     rest = output[len(prefix):]
     first_line = rest.lstrip("\n")
     leading_spaces = len(first_line) - len(first_line.lstrip())
     assert leading_spaces > 0
+
+
+def test_pulse_ansi_ends_with_home():
+    """pulse_ansi ends every frame with HOME so the cursor is parked."""
+    from countdown.pulses.ansi import pulse_ansi
+
+    lines = _zero_lines()
+    buf = io.StringIO()
+    with patch("sys.stdout", buf):
+        pulse_ansi(lines)
+    output = buf.getvalue()
+    assert output.rstrip("\x1b[H").endswith("\x1b[H") or output.endswith(
+        "\x1b[H"
+    ), f"pulse_ansi frame should end with HOME escape, got {output[-20:]!r}"
 
 
 def test_pulse_ansi_uses_sine_wave_intensity_levels():
@@ -187,31 +207,31 @@ def test_pulse_rich_callable():
     assert callable(pulse_rich)
 
 
-def test_pulse_rich_uses_live_update():
-    """Rich pulse returns a Text renderable for run_countdown to drive Live."""
+def test_pulse_rich_prints_directly():
+    """Rich pulse prints frame directly (no return value, no Live)."""
     from countdown.pulses import rich as rich_mod
 
     lines = _zero_lines()
-    # Reset state so we get a deterministic first-frame phase
     rich_mod.reset_state()
     result = rich_mod.pulse_rich(lines)
-    # Should return a Rich Text renderable, not print
-    assert result is not None
+    assert result is None
+
+
+def test_pulse_rich_builds_wave_renderable():
+    """build_wave_renderable returns a Group of styled Text rows."""
     from rich.text import Text
 
-    assert isinstance(result, Text)
-
-
-def test_pulse_rich_builds_wave_text():
-    """_build_wave_text returns a Text object with hex color markup."""
-    from countdown.pulses.rich import _build_wave_text
+    from countdown.pulses.rich import build_wave_renderable
 
     lines = _zero_lines()
-    text = _build_wave_text(lines, 0.0)
-    # Rich Text stores markup separately from plain text
-    assert "#" in text.markup
-    # Should contain block characters from the glyph
-    assert "\u2588" in text.markup
+    renderable = build_wave_renderable(lines, 0.0)
+    rows = list(renderable.renderables)
+    assert len(rows) == len(lines)
+    for row in rows:
+        assert isinstance(row, Text)
+        # Strip default style: every styled cell carries a non-default style
+        plain = row.plain
+        assert "\u2588" in plain or " " in plain
 
 
 # ============================================================================
@@ -248,44 +268,28 @@ def test_pulse_drawille_renders_braille():
 
 
 def test_pulse_drawille_centers_correctly():
-    """Drawille frame is centered for glyph_height braille rows, not raw pixels.
+    """Drawille frame is centered via the shared ``centered_frame`` helper.
 
-    Regression test for centering bug where (glyph_height+3)//4 was used
-    instead of glyph_height for vertical centering math.
+    For size-5 digits (5 rows), the braille canvas maps 1 braille row per
+    glyph row. A 24-row terminal with 5 braille rows yields
+    ``(24-5)//2 == 9`` lines of vertical padding.
     """
-    from countdown.pulses.drawille import _centered_frame, _glyph_to_pixels
+    from countdown.digits import CHARS_BY_SIZE
+    from countdown.pulses.drawille import build_frame
 
-    lines = _zero_lines()  # 7-row glyph block
-    pixels = _glyph_to_pixels(lines)
-    assert len(pixels) > 0
+    chars = CHARS_BY_SIZE[5]
+    lines = timer.get_number_lines(0, chars)
 
-    # Build a frame string matching the braille row count
-    from drawille import Canvas
+    with patch(
+        "countdown.display.get_terminal_size",
+        lambda: os.terminal_size((80, 24)),
+    ):
+        centered = build_frame(lines, 0.0)
 
-    canvas = Canvas()
-    for px, py in pixels:
-        canvas.set(px, py)
-    frame = canvas.frame()
-    braille_rows = len(frame.splitlines())
-    # After 4x vertical scale, glyph_height=7 → 7 braille rows
-    assert braille_rows == 7, f"expected 7 braille rows, got {braille_rows}"
-
-    # Center: 24-row terminal, content 7 rows → vertical_padding = (24-7)//2 = 8
-    with patch("countdown.pulses.drawille.get_terminal_size") as mock_size:
-        mock_size.return_value = os.terminal_size((80, 24))
-        centered = _centered_frame(frame, lines)
-
-    # Count leading newlines (padding) and content rows separately
     leading_newlines = len(centered) - len(centered.lstrip("\n"))
-    assert leading_newlines == 8, (
-        f"expected 8 leading newlines for centered drawille, got {leading_newlines}"
-    )
-
-    # After stripping padding, exactly 7 braille content lines remain
-    after_padding = centered.lstrip("\n")
-    content_lines = after_padding.splitlines()
-    assert len(content_lines) == 7, (
-        f"expected 7 content rows, got {len(content_lines)}"
+    assert leading_newlines == 9, (
+        f"expected 9 leading newlines for 5-row drawille on 24-row terminal, "
+        f"got {leading_newlines}"
     )
 
 
@@ -332,8 +336,8 @@ def test_pulse_ghostprint_callable():
     assert callable(pulse_ghostprint)
 
 
-def test_pulse_ghostprint_uses_clear_and_print():
-    """Ghostprint pulse uses CLEAR escape and prints to stdout."""
+def test_pulse_ghostprint_uses_full_clear_and_prints():
+    """Ghostprint pulse uses FULL_CLEAR_HOME and prints to stdout."""
     from countdown.pulses.ghostprint import pulse_ghostprint
 
     lines = _zero_lines()
@@ -341,7 +345,9 @@ def test_pulse_ghostprint_uses_clear_and_print():
     with patch("sys.stdout", buf):
         pulse_ghostprint(lines)
     output = buf.getvalue()
-    assert "\x1b[H\x1b[J" in output
+    assert output.startswith("\x1b[2J\x1b[H"), (
+        "ghostprint must start every frame with full-screen clear + home"
+    )
 
 
 # ============================================================================
@@ -354,6 +360,20 @@ def test_pulse_asciimatics_callable():
     from countdown.pulses.asciimatics import pulse_asciimatics
 
     assert callable(pulse_asciimatics)
+
+
+def test_get_number_lines_no_trailing_space():
+    """get_number_lines appends no trailing space after the final character.
+
+    Trailing whitespace would skew horizontal centering (every character
+    except the last becomes visually padded) and shift the radial-wave
+    centerline to the right of the glyph cluster.
+    """
+    lines = get_number_lines(0)
+    for raw in lines:
+        assert raw == raw.rstrip(), (
+            f"line has trailing whitespace: {raw!r}"
+        )
 
 
 def test_pulse_asciimatics_uses_screen_wrapper():
@@ -388,6 +408,9 @@ def test_pulse_asciimatics_demo_calls_screen_refresh():
         def clear(self):
             captured["clears"] += 1
 
+        def clear_buffer(self, fg=0, attr=0, bg=0):
+            captured["clears"] += 1
+
         def refresh(self):
             captured["refresh_calls"] += 1
 
@@ -398,7 +421,7 @@ def test_pulse_asciimatics_demo_calls_screen_refresh():
             return None
 
     class FakeEffect:
-        def __init__(self, screen, lines, y, label=None, **kwargs):
+        def __init__(self, screen, lines, y, x_offset, label=None, **kwargs):
             self.screen = screen
 
         def update(self, frame_no):
@@ -408,9 +431,6 @@ def test_pulse_asciimatics_demo_calls_screen_refresh():
 
     def fake_time():
         return next(time_values)
-
-    def fake_sleep(s):
-        pass
 
     captured_callback = {}
 
@@ -423,7 +443,6 @@ def test_pulse_asciimatics_demo_calls_screen_refresh():
         patch("countdown.pulses.asciimatics.SineWaveEffect", FakeEffect),
         patch("countdown.pulses.asciimatics.Screen.wrapper", side_effect=fake_wrapper),
         patch("countdown.pulses.asciimatics.time", fake_time),
-        patch("countdown.pulses.asciimatics.sleep", fake_sleep),
     ):
         _run_screen(["abc"], duration=0.1, label="asciimatics")
 

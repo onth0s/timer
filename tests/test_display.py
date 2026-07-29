@@ -156,9 +156,9 @@ def test_char_heights_match_size():
 def test_get_chars_for_terminal_selects_largest_that_fits(monkeypatch):
     """Test that get_chars_for_terminal selects the largest size that fits both dimensions."""
     # Size requirements for displaying 00:00:
-    # 16(93w), 7(57w), 5(33w), 3(20w), 1(10w)
+    # 16(91w), 7(55w), 5(32w), 3(19w), 1(9w)
 
-    # 80x24 terminal - size 7 fits (57w <= 80, 7h <= 24)
+    # 80x24 terminal - size 7 fits (55w <= 80, 7h <= 24)
     monkeypatch.setattr(
         "countdown.display.get_terminal_size",
         fake_size(80, 24),
@@ -167,7 +167,7 @@ def test_get_chars_for_terminal_selects_largest_that_fits(monkeypatch):
     height = len(chars["0"].splitlines())
     assert height == 7, "80x24 terminal should select size 7"
 
-    # 100x24 terminal - size 16 fits (93w <= 100, 16h <= 24)
+    # 100x24 terminal - size 16 fits (91w <= 100, 16h <= 24)
     monkeypatch.setattr(
         "countdown.display.get_terminal_size",
         fake_size(100, 24),
@@ -176,7 +176,7 @@ def test_get_chars_for_terminal_selects_largest_that_fits(monkeypatch):
     height = len(chars["0"].splitlines())
     assert height == 16, "100x24 terminal should select size 16"
 
-    # 60x20 terminal - size 7 fits (57w <= 60, 7h <= 20)
+    # 60x20 terminal - size 7 fits (55w <= 60, 7h <= 20)
     monkeypatch.setattr(
         "countdown.display.get_terminal_size",
         fake_size(60, 20),
@@ -185,16 +185,16 @@ def test_get_chars_for_terminal_selects_largest_that_fits(monkeypatch):
     height = len(chars["0"].splitlines())
     assert height == 7, "60x20 terminal should select size 7"
 
-    # 32x10 terminal - size 3 fits (20w <= 32, 3h <= 10)
+    # 31x10 terminal - size 5 too wide (32 > 31), size 3 fits (19w <= 31, 3h <= 10)
     monkeypatch.setattr(
         "countdown.display.get_terminal_size",
-        fake_size(32, 10),
+        fake_size(31, 10),
     )
     chars = display.get_chars_for_terminal()
     height = len(chars["0"].splitlines())
-    assert height == 3, "32x10 terminal should select size 3"
+    assert height == 3, "31x10 terminal should select size 3"
 
-    # 15x5 terminal - size 1 fits (10w <= 15, 1h <= 5)
+    # 15x5 terminal - size 1 fits (9w <= 15, 1h <= 5)
     monkeypatch.setattr("countdown.display.get_terminal_size", fake_size(15, 5))
     chars = display.get_chars_for_terminal()
     height = len(chars["0"].splitlines())
@@ -220,14 +220,14 @@ def test_different_sizes_render_correctly(monkeypatch):
     lines = timer.get_number_lines(0, chars)  # 00:00
     assert len(lines) == 7, "80x24 terminal should render 7 lines"
 
-    # Test size 3 rendering (32x10 selects size 3)
+    # Test size 3 rendering (31x10 selects size 3)
     monkeypatch.setattr(
         "countdown.display.get_terminal_size",
-        fake_size(32, 10),
+        fake_size(31, 10),
     )
     chars = display.get_chars_for_terminal()
     lines = timer.get_number_lines(0, chars)  # 00:00
-    assert len(lines) == 3, "32x10 terminal should render 3 lines"
+    assert len(lines) == 3, "31x10 terminal should render 3 lines"
 
     # Test size 1 rendering (15x5 selects size 1)
     monkeypatch.setattr("countdown.display.get_terminal_size", fake_size(15, 5))
@@ -238,34 +238,34 @@ def test_different_sizes_render_correctly(monkeypatch):
 
 def test_width_constraints_force_smaller_size(monkeypatch):
     """Test that narrow terminal widths force selection of smaller digit sizes."""
-    # Size 7 requires 57 width - a 56x20 terminal should select size 5 instead
+    # Size 7 requires 55 width - a 54x20 terminal should select size 5 instead
     monkeypatch.setattr(
         "countdown.display.get_terminal_size",
-        fake_size(56, 20),
+        fake_size(54, 20),
     )
     chars = display.get_chars_for_terminal()
     height = len(chars["0"].splitlines())
     assert height == 5, (
-        "56x20 terminal too narrow for size 7, should select size 5"
+        "54x20 terminal too narrow for size 7, should select size 5"
     )
 
-    # Size 5 requires 33 width - a 32x10 terminal should select size 3 instead
+    # Size 5 requires 32 width - a 31x10 terminal should select size 3 instead
     monkeypatch.setattr(
         "countdown.display.get_terminal_size",
-        fake_size(32, 10),
+        fake_size(31, 10),
     )
     chars = display.get_chars_for_terminal()
     height = len(chars["0"].splitlines())
     assert height == 3, (
-        "32x10 terminal too narrow for size 5, should select size 3"
+        "31x10 terminal too narrow for size 5, should select size 3"
     )
 
-    # Size 3 requires 20 width - a 19x5 terminal should select size 1 instead
-    monkeypatch.setattr("countdown.display.get_terminal_size", fake_size(19, 5))
+    # Size 3 requires 19 width - a 18x5 terminal should select size 1 instead
+    monkeypatch.setattr("countdown.display.get_terminal_size", fake_size(18, 5))
     chars = display.get_chars_for_terminal()
     height = len(chars["0"].splitlines())
     assert height == 1, (
-        "19x5 terminal too narrow for size 3, should select size 1"
+        "18x5 terminal too narrow for size 3, should select size 1"
     )
 
 
@@ -279,6 +279,6 @@ def test_three_digit_minutes_force_smaller_chars(monkeypatch):
     chars = display.get_chars_for_terminal(0)
     assert len(chars["0"].splitlines()) == 7
 
-    # But 100 minutes needs 70 columns at size 7, so we should drop to size 5
+    # But 100 minutes needs 68 columns at size 7, so we should drop to size 5
     chars = display.get_chars_for_terminal(6000)  # 100 minutes
     assert len(chars["0"].splitlines()) == 5

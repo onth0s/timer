@@ -34,6 +34,13 @@ def duration(string):
 def get_number_lines(seconds, chars):
     """Return list of lines which make large MM:SS glyphs for given seconds.
 
+    A trailing space is appended after each character (including the last) as
+    a visual gutter between adjacent glyphs, then stripped from the final
+    assembled lines so the rendered width matches the visible glyph width
+    exactly. This preserves each character's own internal padding (e.g. the
+    colon's leading/trailing spaces) while keeping the output free of trailing
+    whitespace.
+
     Args:
         seconds: The time in seconds to format
         chars: Dictionary of character glyphs to use for rendering
@@ -49,4 +56,4 @@ def get_number_lines(seconds, chars):
         char_lines = chars[char].splitlines()
         for i, line in enumerate(char_lines):
             lines[i] += line + " "
-    return lines
+    return [line.rstrip() for line in lines] if lines else lines
