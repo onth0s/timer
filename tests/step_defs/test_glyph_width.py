@@ -58,6 +58,17 @@ def then_uniform_width(ctx):
 # ---------------------------------------------------------------------------
 
 
+@given(
+    parsers.parse("the consecutive time values {a:d} and {b:d} rendered as {mode}"),
+    target_fixture="ctx",
+)
+def given_consecutive_jitter_values(a, b, mode):
+    count_up = mode == "count-up"
+    lines_a = timer.get_number_lines(a, _TEST_CHARS, count_up=count_up)
+    lines_b = timer.get_number_lines(b, _TEST_CHARS, count_up=count_up)
+    return {"lines_a": lines_a, "lines_b": lines_b}
+
+
 @given("the time values 9 and 10 rendered as count-up", target_fixture="ctx")
 def given_jitter_values():
     lines_9 = timer.get_number_lines(9, _TEST_CHARS, count_up=True)

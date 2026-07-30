@@ -51,7 +51,10 @@ def populate_constants():
             if digit == -1:
                 colon_width = max(len(line) for line in text.splitlines())
                 chars[":"] = (
-                    center(text, colon_width + 2)  # 2 spaces around :
+                    "\n".join(
+                        f"{line.rstrip():<{colon_width + 1}}"
+                        for line in text.splitlines()
+                    )
                     if len(text) > 1
                     else text
                 )

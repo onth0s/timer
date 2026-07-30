@@ -183,4 +183,4 @@ def get_number_lines(seconds, chars, *, show_hours=False, count_up=False):
             if j > 0:
                 lines[i] += " "
             lines[i] += line
-    return [line.rstrip() for line in lines]
+    return lines

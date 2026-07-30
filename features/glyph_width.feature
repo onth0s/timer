@@ -37,3 +37,31 @@ Feature: Glyph width consistency
   Scenario: Display width does not change between consecutive seconds (no jitter)
     Given the time values 9 and 10 rendered as count-up
     Then both renderings should have the same total width
+
+  Scenario Outline: No jitter between consecutive seconds (count-up)
+    Given the consecutive time values <a> and <b> rendered as count-up
+    Then both renderings should have the same total width
+
+    Examples:
+      | a | b |
+      | 0 | 1 |
+      | 1 | 2 |
+      | 2 | 3 |
+      | 3 | 4 |
+      | 4 | 5 |
+      | 5 | 6 |
+      | 6 | 7 |
+      | 7 | 8 |
+      | 8 | 9 |
+      | 9 | 10 |
+
+  Scenario Outline: No jitter between consecutive seconds (countdown)
+    Given the consecutive time values <a> and <b> rendered as countdown
+    Then both renderings should have the same total width
+
+    Examples:
+      | a  | b  |
+      | 0  | 1  |
+      | 1  | 2  |
+      | 9  | 10 |
+      | 59 | 60 |
