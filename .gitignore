@@ -41,5 +41,5 @@ ruff_cache/
 Thumbs.db
 
 # Project-specific
-scratch/
+scratch/*
 !scratch/*.md
