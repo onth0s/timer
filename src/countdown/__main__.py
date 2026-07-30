@@ -174,7 +174,9 @@ def run_countdown(
 
         # Persistent summary log using rich
         if count_up:
-            dur_str = timer.format_duration(timer.duration(f"{final_seconds}s"))
+            dur_str = timer.format_duration(
+                timer.compact(timer.duration(f"{final_seconds}s"))
+            )
             console.print(
                 Panel(
                     f"[bold green]Timer ran for {dur_str}[/bold green]",
@@ -183,7 +185,9 @@ def run_countdown(
                 )
             )
         else:
-            total_ran = timer.format_duration(timer.duration(f"{total_seconds}s"))
+            total_ran = timer.format_duration(
+                timer.compact(timer.duration(f"{total_seconds}s"))
+            )
             if exit_delay is not None:
                 delay_str = f"{exit_delay:.2f}s"
                 console.print(
