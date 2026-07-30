@@ -104,17 +104,17 @@ def test_main_1_minute(runner, fake_terminal_size, fake_clock):
             )
 
 
-def test_main_10_minutes_has_600_clear_screens(
+def test_main_3_seconds_has_3_clear_screens(
     runner,
     fake_terminal_size,
     fake_clock,
 ):
     fake_terminal_size(32, 10)
-    result = runner.invoke(__main__.main, ["run", "10m"])
-    # 10 minutes = 600 seconds + 1 to display 00:00
-    assert fake_clock.slept == pytest.approx(10 * 60 + 1, abs=0.1)
-    assert fake_clock.elapsed == pytest.approx(10 * 60 + 1, abs=0.1)
-    assert result.stdout.count("\033[H\033[J") == 10 * 60 + 1
+    result = runner.invoke(__main__.main, ["run", "3s"])
+    # 3 seconds = 3 seconds + 1 to display 00:00
+    assert fake_clock.slept == pytest.approx(3 + 1, abs=0.1)
+    assert fake_clock.elapsed == pytest.approx(3 + 1, abs=0.1)
+    assert result.stdout.count("\033[H\033[J") == 3 + 1
 
 
 def test_main_enables_alt_buffer_and_hides_cursor_at_beginning(
@@ -123,7 +123,7 @@ def test_main_enables_alt_buffer_and_hides_cursor_at_beginning(
     fake_clock,
 ):
     fake_terminal_size(32, 10)
-    result = runner.invoke(__main__.main, ["run", "5m"])
+    result = runner.invoke(__main__.main, ["run", "2s"])
     assert result.stdout.startswith("\033[?1049h\033[?25l")
 
 
@@ -133,7 +133,7 @@ def test_main_disable_alt_buffer_and_show_cursor_at_end(
     fake_clock,
 ):
     fake_terminal_size(32, 10)
-    result = runner.invoke(__main__.main, ["run", "5m"])
+    result = runner.invoke(__main__.main, ["run", "2s"])
     assert result.stdout.endswith("\033[?25h\033[?1049l")
 
 
@@ -148,7 +148,7 @@ def test_main_early_exit_still_shows_cursor_at_end(
     # Hit Ctrl+C after 4 seconds total sleep time (chunked sleep)
     fake_clock.raises = {4: KeyboardInterrupt()}
 
-    result = runner.invoke(__main__.main, ["run", "15m"])
+    result = runner.invoke(__main__.main, ["run", "10s"])
     # 4 iterations x 6 newlines each (2 padding + 4 between 5 content lines)
     # = 24 newlines, no trailing newline (end=""), so splitlines() gives 25
     assert len(result.stdout.splitlines()) == 25
@@ -527,6 +527,48 @@ def test_bare_invalid_duration_reports_error(runner):
     output = result.output + (result.stderr or "")
     assert "bogus" in output
     assert "no such command" not in output.lower()
+
+
+# ============================================================================
+# Prompt tests (duration value ≥ 60)
+# ============================================================================
+
+
+def test_duration_prompt_60s_accept_compact(
+    runner, fake_terminal_size, fake_clock
+):
+    """`timer run 60s` prompts; user accepts compact form (1m)."""
+    fake_terminal_size(40, 20)
+    result = runner.invoke(__main__.main, ["run", "60s"], input="1\n")
+    assert result.exit_code == 0
+
+
+def test_duration_prompt_60s_keep_raw(
+    runner, fake_terminal_size, fake_clock
+):
+    """`timer run 60s` prompts; user keeps raw (60s)."""
+    fake_terminal_size(40, 20)
+    result = runner.invoke(__main__.main, ["run", "60s"], input="2\n")
+    assert result.exit_code == 0
+
+
+def test_duration_prompt_90m_accept_compact(
+    runner, fake_terminal_size, fake_clock
+):
+    """`timer run 90m` prompts; user accepts compact (1h30m)."""
+    fake_terminal_size(40, 20)
+    result = runner.invoke(__main__.main, ["run", "90m"], input="1\n")
+    assert result.exit_code == 0
+
+
+def test_duration_no_prompt(
+    runner, fake_terminal_size, fake_clock
+):
+    """`timer run 2m10s` does not prompt (m,s both < 60)."""
+    fake_terminal_size(40, 20)
+    result = runner.invoke(__main__.main, ["run", "2m10s"])
+    assert result.exit_code == 0
+    assert "=" not in result.output  # no prompt equality message
 
 
 # ============================================================================

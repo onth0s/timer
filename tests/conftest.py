@@ -84,6 +84,8 @@ def fake_clock(monkeypatch):
     clock = FakeClock()
     monkeypatch.setattr("countdown.__main__.sleep", clock.sleep)
     monkeypatch.setattr("countdown.__main__.time", clock.time)
+    monkeypatch.setattr("time.sleep", clock.sleep)
+    monkeypatch.setattr("time.time", clock.time)
     return clock
 
 
@@ -121,13 +123,27 @@ def no_pulse(monkeypatch):
 
     original = __main__.run_countdown._original  # type: ignore[attr-defined]
 
-    def wrapped(total_seconds, pulse_fn=None, max_pulses=0):
+    def wrapped(total_seconds, pulse_fn=None, max_pulses=0, *, show_hours=False, **kwargs):
         if pulse_fn is None:
             pulse_fn = pulse_ansi
-        return original(total_seconds, pulse_fn=pulse_fn, max_pulses=max_pulses)
+        return original(
+            total_seconds,
+            pulse_fn=pulse_fn,
+            max_pulses=max_pulses,
+            show_hours=show_hours,
+            **kwargs,
+        )
 
     monkeypatch.setattr(__main__, "run_countdown", wrapped)
+    monkeypatch.setattr("countdown.__main__.check_for_keypress", lambda: False)
     return original
+
+
+@pytest.fixture(autouse=True)
+def no_check_for_keypress(monkeypatch):
+    """Auto-disable check_for_keypress to avoid blocking system calls in tests."""
+    monkeypatch.setattr("countdown.__main__.check_for_keypress", lambda: False)
+
 
 
 @pytest.fixture

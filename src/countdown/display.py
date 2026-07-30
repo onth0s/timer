@@ -125,14 +125,28 @@ def enable_ansi_escape_codes():  # pragma: no cover
         )
 
 
-def _format_time_string(seconds):
-    """Return the MM:SS string used for display based on seconds."""
+def _format_time_string(seconds, *, show_hours=False, count_up=False):
+    """Return the formatted time string (SS, MM:SS, or HH:MM:SS) used for display."""
     seconds = max(0, int(seconds))
-    minutes, seconds = divmod(seconds, 60)
-    return f"{minutes:02d}:{seconds:02d}"
+    if count_up:
+        if seconds < 60:
+            return f"{seconds:02d}s" if show_hours is None else f"{seconds:02d}"
+        elif seconds < 3600 and not show_hours:
+            minutes, secs = divmod(seconds, 60)
+            return f"{minutes:02d}:{secs:02d}"
+        else:
+            hours, rest = divmod(seconds, 3600)
+            minutes, secs = divmod(rest, 60)
+            return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    if show_hours:
+        hours, rest = divmod(seconds, 3600)
+        minutes, secs = divmod(rest, 60)
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    minutes, secs = divmod(seconds, 60)
+    return f"{minutes:02d}:{secs:02d}"
 
 
-def get_required_width(chars, time_string):
+def get_required_width(chars, time_string, *, show_hours=False):
     """Calculate the minimum width required to display the given time string.
 
     Returns the actual rendered width by building ``get_number_lines`` and
@@ -142,27 +156,30 @@ def get_required_width(chars, time_string):
     from . import timer as timer_mod
 
     seconds = _parse_time_string(time_string)
-    lines = timer_mod.get_number_lines(seconds, chars)
+    lines = timer_mod.get_number_lines(seconds, chars, show_hours=show_hours)
     return max(len(line) for line in lines) if lines else 0
 
 
 def _parse_time_string(time_string):
-    """Convert an MM:SS string to total seconds."""
+    """Convert an MM:SS or HH:MM:SS string to total seconds."""
     parts = time_string.split(":")
-    return int(parts[0]) * 60 + int(parts[1])
+    if len(parts) == 3:
+        return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+    return int(parts[0]) * 60 + int(parts[1]) if len(parts) == 2 else 0
 
 
-def get_chars_for_terminal(seconds=0):
+def get_chars_for_terminal(seconds=0, *, show_hours=False):
     """Return the largest CHARS dictionary that fits in the current terminal.
 
     Args:
         seconds: Current countdown value, used to account for wide minute values.
+        show_hours: If True, measure width for HH:MM:SS instead of MM:SS.
     """
     width, height = get_terminal_size()
-    time_string = _format_time_string(seconds)
+    time_string = _format_time_string(seconds, show_hours=show_hours)
     for size in DIGIT_SIZES:
         chars = CHARS_BY_SIZE[size]
-        required_width = get_required_width(chars, time_string)
+        required_width = get_required_width(chars, time_string, show_hours=show_hours)
         # For size 3 (smallest multi-line), allow it without padding
         # For larger sizes, require 1 line of padding on top and bottom (2 total)
         padding_needed = 0 if size == 3 else 2

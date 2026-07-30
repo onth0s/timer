@@ -31,104 +31,179 @@ rich_click.USE_RICH_MARKUP = True
 rich_click.STYLE_HELPTEXT = ""
 
 
-def get_number_lines(seconds):
-    """Return list of lines which make large MM:SS glyphs for given seconds."""
-    return timer.get_number_lines(seconds, get_chars_for_terminal(seconds))
+def get_number_lines(seconds, *, show_hours=False, count_up=False):
+    """Return list of lines which make large glyphs for the time display."""
+    return timer.get_number_lines(
+        seconds,
+        get_chars_for_terminal(seconds, show_hours=show_hours),
+        show_hours=show_hours,
+        count_up=count_up,
+    )
 
 
-def run_countdown(total_seconds, pulse_fn=None, max_pulses=None):
-    """Run the countdown timer for the specified duration.
+def run_countdown(
+    total_seconds,
+    pulse_fn=None,
+    max_pulses=None,
+    *,
+    show_hours=False,
+    count_up=False,
+):
+    """Run the countdown or count-up timer.
 
     Args:
-        total_seconds: Duration in seconds to count down from
+        total_seconds: Duration in seconds to count down from (or None for count-up)
         pulse_fn: Callable(lines) called after countdown reaches 0
-                  to animate the finished state. Returns either None (prints
-                  to stdout directly) or a Rich Text/Console renderable.
-        max_pulses: Maximum pulse iterations before exiting (default: None = infinite).
+        max_pulses: Maximum pulse iterations before exiting.
+        show_hours: If True, display as HH:MM:SS.
+        count_up: If True, count up starting from 0 (stopwatch mode).
     """
+    from rich.console import Console
+    from rich.panel import Panel
+
     from .pulses.ansi import pulse_ansi
 
     if pulse_fn is None:
         pulse_fn = pulse_ansi
 
+    console = Console()
     enable_ansi_escape_codes()
     old_settings = setup_terminal()
     print(ENABLE_ALT_BUFFER + HIDE_CURSOR, end="")
+
+    zero_epoch = None
+    exit_delay = None
+    final_seconds = 0
+
     try:
         paused = False
-        n = total_seconds
-        sleep_until = time() + total_seconds
-        pause_start = None
-        while n >= 0 or paused:
-            lines = get_number_lines(n)
-            print_full_screen(lines, paused=paused)
+        if count_up:
+            n = 0
+            start_time = time()
+            pause_accum = 0.0
+            pause_start = None
+            while True:
+                lines = get_number_lines(n, show_hours=show_hours, count_up=True)
+                print_full_screen(lines, paused=paused)
 
-            # Check for keypress to toggle pause or adjust time
-            if check_for_keypress():
-                key = read_key()  # Consume the keypress
+                if check_for_keypress():
+                    key = read_key()
+                    if key == "q" or key == "\x1b":  # q or Esc
+                        final_seconds = n
+                        break
+                    elif is_pause_key(key):
+                        if paused:
+                            pause_accum += time() - pause_start
+                            pause_start = None
+                        else:
+                            pause_start = time()
+                        paused = not paused
+                        drain_keypresses()
 
-                if key == "q":
-                    # Quit the timer
-                    break
-                elif is_pause_key(key):
-                    if paused:
-                        sleep_until += time() - pause_start
-                        pause_start = None
-                    else:
-                        pause_start = time()
-                    paused = not paused
-                    drain_keypresses()  # Ignore any additional rapid keypresses
-                    lines = get_number_lines(n)
-                    print_full_screen(lines, paused=paused)
-                elif is_time_adjust_key(key):
-                    # Adjust the timer by +/- 30 seconds
-                    adjustment = get_time_adjustment(key)
-                    new_n = max(0, n + adjustment)  # Don't go below 0
-                    sleep_until += new_n - n
-                    n = new_n
-                    drain_keypresses()  # Ignore any additional rapid keypresses
-                    lines = get_number_lines(n)
-                    print_full_screen(lines, paused=paused)
-
-            # Only sleep and decrement if not paused
-            if not paused:
-                # Wall-clock time at which to move from displaying n to n-1
-                display_this_second_until = sleep_until - n + 1
-                while time() < display_this_second_until:
-                    # Sleep in small chunks to check for keypresses more frequently
+                if not paused:
                     sleep(0.05)
-                    if check_for_keypress():
-                        break  # Exit sleep early if key is pressed
-                n -= 1
-            else:
-                # Short sleep when paused for responsive keypress checking
+                    n = int(time() - start_time - pause_accum)
+                else:
+                    sleep(0.05)
+        else:
+            n = total_seconds
+            sleep_until = time() + total_seconds
+            pause_start = None
+            while n >= 0 or paused:
+                lines = get_number_lines(n, show_hours=show_hours)
+                print_full_screen(lines, paused=paused)
+
+                if check_for_keypress():
+                    key = read_key()
+                    if key == "q" or key == "\x1b":  # q or Esc
+                        break
+                    elif is_pause_key(key):
+                        if paused:
+                            sleep_until += time() - pause_start
+                            pause_start = None
+                        else:
+                            pause_start = time()
+                        paused = not paused
+                        drain_keypresses()
+                        lines = get_number_lines(n, show_hours=show_hours)
+                        print_full_screen(lines, paused=paused)
+                    elif is_time_adjust_key(key):
+                        adjustment = get_time_adjustment(key)
+                        new_n = max(0, n + adjustment)
+                        sleep_until += new_n - n
+                        n = new_n
+                        drain_keypresses()
+                        lines = get_number_lines(n, show_hours=show_hours)
+                        print_full_screen(lines, paused=paused)
+
+                if not paused:
+                    display_this_second_until = sleep_until - n + 1
+                    while time() < display_this_second_until:
+                        # Sleep remainder or step up to display_this_second_until
+                        remaining = display_this_second_until - time()
+                        sleep(min(0.05, max(0.001, remaining)))
+                        if check_for_keypress():
+                            break
+                    n -= 1
+                else:
+                    sleep(0.05)
+
+            # Record epoch timestamp when reaching zero
+            zero_epoch = time()
+
+            if getattr(pulse_fn, "__name__", "") == "pulse_asciimatics":
+                print(SHOW_CURSOR + DISABLE_ALT_BUFFER, end="", flush=True)
+                pulse_fn(get_number_lines(0, show_hours=show_hours))
+                exit_delay = time() - zero_epoch
+                return
+
+            pulse_count = 0
+            while not check_for_keypress():
+                if max_pulses is not None and pulse_count >= max_pulses:
+                    break
+                pulse_fn(get_number_lines(0, show_hours=show_hours))
                 sleep(0.05)
+                pulse_count += 1
 
-        # Pulse phase: animate the zero state until user presses a key.
-        # All pulse functions print directly (return None) — we just loop
-        # with a small sleep to keep the animation going.
-        #
-        # Asciimatics is special: it manages its own Screen.wrapper loop,
-        # blocks internally, and captures its own keyboard input.  We exit
-        # the alt buffer first so Screen.wrapper starts from a clean state,
-        # then run it once as a one-shot.
-        if getattr(pulse_fn, "__name__", "") == "pulse_asciimatics":
-            print(SHOW_CURSOR + DISABLE_ALT_BUFFER, end="", flush=True)
-            pulse_fn(get_number_lines(0))
-            return
+            exit_delay = time() - zero_epoch
 
-        pulse_count = 0
-        while not check_for_keypress():
-            if max_pulses is not None and pulse_count >= max_pulses:
-                break
-            pulse_fn(get_number_lines(0))
-            sleep(0.05)
-            pulse_count += 1
     except KeyboardInterrupt:
-        pass
+        if zero_epoch is not None and exit_delay is None:
+            exit_delay = time() - zero_epoch
     finally:
         restore_terminal(old_settings)
         print(SHOW_CURSOR + DISABLE_ALT_BUFFER, end="")
+
+        # Persistent summary log using rich
+        if count_up:
+            dur_str = timer.format_duration(timer.duration(f"{final_seconds}s"))
+            console.print(
+                Panel(
+                    f"[bold green]Timer ran for {dur_str}[/bold green]",
+                    title="[bold cyan]Timer Summary[/bold cyan]",
+                    expand=False,
+                )
+            )
+        else:
+            total_ran = timer.format_duration(timer.duration(f"{total_seconds}s"))
+            if exit_delay is not None:
+                delay_str = f"{exit_delay:.2f}s"
+                console.print(
+                    Panel(
+                        f"[bold green]Timer completed ({total_ran})[/bold green]\n"
+                        f"[bold yellow]Time to exit after timeout: {delay_str}[/bold yellow]",
+                        title="[bold cyan]Timer Summary[/bold cyan]",
+                        expand=False,
+                    )
+                )
+            else:
+                console.print(
+                    Panel(
+                        f"[bold yellow]Timer stopped early ({total_ran} configured)[/bold yellow]",
+                        title="[bold cyan]Timer Summary[/bold cyan]",
+                        expand=False,
+                    )
+                )
 
 
 # Store original on the function for tests to bypass the default wrapper.
@@ -159,7 +234,14 @@ class SmartGroup(click.Group):
 def main(ctx):
     """Countdown timer for the terminal with configurable pulse animations."""
     if ctx.invoked_subcommand is None:
-        click.echo(ctx.get_help())
+        # Default bare 'timer' execution to count-up mode
+        config = Config.load()
+        try:
+            mode = config.get("anim") or "rich"
+            pulse_fn = get_pulse_fn(mode)
+        except ValueError as exc:
+            raise click.UsageError(str(exc)) from exc
+        run_countdown(0, pulse_fn=pulse_fn, count_up=True)
 
 
 @main.command(name="run")
@@ -172,30 +254,11 @@ def main(ctx):
 def countdown(anim, duration):
     r"""Run the countdown timer for the given DURATION.
 
-    DURATION should be a number followed by m or s for minutes or seconds.
+    DURATION supports hours (h), minutes (m), and seconds (s).
     A bare number is interpreted as seconds.
-
-    Examples:
-    \b
-    - 10 (10 seconds)
-    - 5m (5 minutes)
-    - 45s (45 seconds)
-    - 2m30s (2 minutes and 30 seconds)
-
-    Press Space, p, k, or Enter to pause/resume the countdown.
-    Press +/= to add 30 seconds, - to subtract 30 seconds.
-    Press q to quit.
+    If no duration is provided, starts counting up from 0s.
     """
     from . import timer as timer_mod
-
-    if duration is None:
-        click.echo(click.get_current_context().get_help())
-        return
-
-    try:
-        total_seconds = timer_mod.duration(duration)
-    except ValueError as exc:
-        raise click.UsageError(str(exc)) from exc
 
     config = Config.load()
     try:
@@ -203,7 +266,34 @@ def countdown(anim, duration):
         pulse_fn = get_pulse_fn(mode)
     except ValueError as exc:
         raise click.UsageError(str(exc)) from exc
-    run_countdown(total_seconds, pulse_fn=pulse_fn)
+
+    if duration is None:
+        run_countdown(0, pulse_fn=pulse_fn, count_up=True)
+        return
+
+    try:
+        dur = timer_mod.duration(duration)
+    except ValueError as exc:
+        raise click.UsageError(str(exc)) from exc
+
+    if timer_mod.needs_prompt(dur):
+        compact_dur = timer_mod.compact(dur)
+        old = timer_mod.format_duration(dur)
+        new = timer_mod.format_duration(compact_dur)
+        click.echo(f"  {old} = {new}")
+        click.echo(f"  [1] {new}")
+        click.echo(f"  [2] {old}")
+        choice = click.prompt(
+            "  Choice",
+            type=click.Choice(["1", "2"]),
+            show_choices=False,
+            prompt_suffix=" ",
+        )
+        if choice == "1":
+            dur = compact_dur
+
+    show_hours = "h" in dur.components
+    run_countdown(dur.total_seconds, pulse_fn=pulse_fn, show_hours=show_hours)
 
 
 @main.group()

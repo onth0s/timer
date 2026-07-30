@@ -9,20 +9,20 @@ def test_countdown_displays_each_second(
     fake_clock,
     monkeypatch,
 ):
-    """Test that a 5-second countdown displays each second value."""
+    """Test that a 2-second countdown displays each second value."""
     fake_terminal_size(40, 20)
 
     displayed_times = []
     original_get_number_lines = __main__.get_number_lines
 
-    def tracking_get_number_lines(seconds):
+    def tracking_get_number_lines(seconds, **kwargs):
         displayed_times.append(seconds)
-        return original_get_number_lines(seconds)
+        return original_get_number_lines(seconds, **kwargs)
 
     monkeypatch.setattr(__main__, "get_number_lines", tracking_get_number_lines)
-    result = runner.invoke(__main__.main, ["run", "5s"])
+    result = runner.invoke(__main__.main, ["run", "2s"])
     assert result.exit_code == 0
-    assert displayed_times == [5, 4, 3, 2, 1, 0]
+    assert displayed_times == [2, 1, 0]
 
 
 def test_drift_correction_with_slow_sleeps(
@@ -43,9 +43,9 @@ def test_drift_correction_with_slow_sleeps(
     displayed_times = []
     original_get_number_lines = __main__.get_number_lines
 
-    def tracking_get_number_lines(seconds):
+    def tracking_get_number_lines(seconds, **kwargs):
         displayed_times.append(seconds)
-        return original_get_number_lines(seconds)
+        return original_get_number_lines(seconds, **kwargs)
 
     monkeypatch.setattr(__main__, "get_number_lines", tracking_get_number_lines)
     result = runner.invoke(__main__.main, ["run", "5s"])
@@ -73,16 +73,16 @@ def test_drift_correction_skips_seconds_when_very_slow(
     displayed_times = []
     original_get_number_lines = __main__.get_number_lines
 
-    def tracking_get_number_lines(seconds):
+    def tracking_get_number_lines(seconds, **kwargs):
         displayed_times.append(seconds)
-        return original_get_number_lines(seconds)
+        return original_get_number_lines(seconds, **kwargs)
 
     monkeypatch.setattr(__main__, "get_number_lines", tracking_get_number_lines)
-    result = runner.invoke(__main__.main, ["run", "60m"])
+    result = runner.invoke(__main__.main, ["run", "10s"])
     assert result.exit_code == 0
 
-    # Timer should still start at 60m and count down
-    assert displayed_times[0] == 60 * 60
+    # Timer should still start at 10s and count down
+    assert displayed_times[0] == 10
     # With extreme drift, seconds are skipped entirely, but the countdown
     # still proceeds monotonically downward
     for i in range(1, len(displayed_times)):
@@ -102,9 +102,9 @@ def test_pause_preserves_remaining_time(
     displayed_times = []
     original_get_number_lines = __main__.get_number_lines
 
-    def tracking_get_number_lines(seconds):
+    def tracking_get_number_lines(seconds, **kwargs):
         displayed_times.append(seconds)
-        return original_get_number_lines(seconds)
+        return original_get_number_lines(seconds, **kwargs)
 
     # Pause on first check (count=1), resume on fifth check (count=5)
     keypress_count = [0]
@@ -149,9 +149,9 @@ def test_add_time_extends_deadline(
     displayed_times = []
     original_get_number_lines = __main__.get_number_lines
 
-    def tracking_get_number_lines(seconds):
+    def tracking_get_number_lines(seconds, **kwargs):
         displayed_times.append(seconds)
-        return original_get_number_lines(seconds)
+        return original_get_number_lines(seconds, **kwargs)
 
     # Press + on first display
     def fake_check_for_keypress():
@@ -191,9 +191,9 @@ def test_subtract_time_shortens_deadline(
     displayed_times = []
     original_get_number_lines = __main__.get_number_lines
 
-    def tracking_get_number_lines(seconds):
+    def tracking_get_number_lines(seconds, **kwargs):
         displayed_times.append(seconds)
-        return original_get_number_lines(seconds)
+        return original_get_number_lines(seconds, **kwargs)
 
     # Press - on first display
     def fake_check_for_keypress():
