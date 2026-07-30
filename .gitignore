@@ -42,3 +42,4 @@ Thumbs.db
 
 # Project-specific
 scratch/
+!scratch/*.md
