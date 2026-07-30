@@ -79,7 +79,6 @@ def run_countdown(
         paused = False
         if count_up:
             n = 0
-            start_time = time()
             pause_accum = 0.0
             pause_start = None
             while True:
@@ -101,8 +100,9 @@ def run_countdown(
                         drain_keypresses()
 
                 if not paused:
-                    sleep(0.05)
-                    n = int(time() - start_time - pause_accum)
+                    sleep(1.0)
+                    n += 1
+                    final_seconds = n
                 else:
                     sleep(0.05)
         else:
@@ -138,15 +138,15 @@ def run_countdown(
 
                 if not paused:
                     display_this_second_until = sleep_until - n + 1
-                    while time() < display_this_second_until:
-                        # Sleep remainder or step up to display_this_second_until
-                        remaining = display_this_second_until - time()
-                        sleep(min(0.05, max(0.001, remaining)))
-                        if check_for_keypress():
-                            break
+                    remaining = display_this_second_until - time()
+                    if remaining > 0:
+                        sleep(remaining)
                     n -= 1
                 else:
-                    sleep(0.05)
+                    if not check_for_keypress():
+                        sleep(1.0)
+                    else:
+                        sleep(0.05)
 
             # Record epoch timestamp when reaching zero
             zero_epoch = time()
@@ -158,9 +158,7 @@ def run_countdown(
                 return
 
             pulse_count = 0
-            while not check_for_keypress():
-                if max_pulses is not None and pulse_count >= max_pulses:
-                    break
+            while (max_pulses is None or pulse_count < max_pulses) and not check_for_keypress():
                 pulse_fn(get_number_lines(0, show_hours=show_hours))
                 sleep(0.05)
                 pulse_count += 1

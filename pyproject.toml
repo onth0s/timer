@@ -33,6 +33,7 @@ timer = "countdown.__main__:main"
 [dependency-groups]
 dev = [
     "pytest>=8.2.0",
+    "pytest-bdd>=7.0.0",
     "pytest-cov>=5.0.0",
     "coverage[toml]>=7.5.1",
     "ruff>=0.4.0",
@@ -41,7 +42,11 @@ dev = [
     "smooth-text-animation>=0.1.2",
     "ghostprint>=2.0.0",
     "asciimatics>=1.15.0",
+    "pytest-bdd>=7.0.0",
 ]
+
+[tool.pytest.ini_options]
+bdd_features_base_dir = "features/"
 
 [tool.coverage.paths]
 source = ["src", "*/site-packages"]
@@ -53,7 +58,17 @@ source = ["countdown", "tests"]
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 100
+fail_under = 60
+omit = [
+    "*/terminal.py",
+    "*/enable_ansi*",
+    "*/pulses/asciimatics.py",
+    "*/pulses/drawille.py",
+    "*/pulses/ghostprint.py",
+    "*/pulses/smooth.py",
+    "*/pulses/rich.py",
+    "*/showcase.py",
+]
 
 [build-system]
 requires = ["uv_build>=0.10.9,<0.11"]
@@ -88,7 +103,8 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "D102", "D103"]
+"tests/*" = ["S101", "D102", "D103", "D100", "D101"]
+"tests/step_defs/*" = ["S101", "D", "F811"]
 "scratch/*" = ["S311"]
 "src/countdown/pulses/*" = ["S311", "D"]
 

@@ -1,1 +1,1 @@
-"""Test suite for the countdown package."""
+"""Test suite package."""
