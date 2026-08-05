@@ -82,9 +82,14 @@ def style_lines(lines, phase):
         if run:
             styled.append(f"{_color_seq(run_idx)}")
             styled.append("".join(run))
+        # Strip trailing spaces BEFORE the reset escape, otherwise they are
+        # shielded from rstrip() by the trailing "\033[0m" and inflate the
+        # visible width by one column, shifting the frame off-center.
+        while styled and styled[-1] == " ":
+            styled.pop()
         if has_colour:
             styled.append(_RESET)
-        body.append("".join(styled).rstrip())
+        body.append("".join(styled))
     return body
 
 
