@@ -48,7 +48,7 @@ When the countdown reaches zero, a pulse animation fires. On any subsequent keyp
 ```
 ╭── Timer Summary ──────────────────────────────╮
 │ Timer completed (5m)                          │
-│ Time to exit after timeout: 1.24s             │
+│ Time to exit after timeout: 14m3s             │
 ╰───────────────────────────────────────────────╯
 ```
 

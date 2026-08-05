@@ -189,7 +189,12 @@ def run_countdown(
                 timer.compact(timer.duration(f"{total_seconds}s"))
             )
             if exit_delay is not None:
-                delay_str = f"{exit_delay:.2f}s"
+                if exit_delay < 1:
+                    delay_str = f"{exit_delay:.2f}s"
+                else:
+                    delay_str = timer.format_duration(
+                        timer.compact(timer.duration(f"{int(exit_delay)}s"))
+                    )
                 console.print(
                     Panel(
                         f"[bold green]Timer completed ({total_ran})[/bold green]\n"
