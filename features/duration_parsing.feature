@@ -18,6 +18,12 @@ Feature: Duration string parsing
       | 1h30m   | 5400    |
       | 1h30m0s | 5400    |
       | 2h0m0s  | 7200    |
+      | :01:20  | 80      |
+      | :45     | 45      |
+      | 4:40    | 16800   |
+      | 16:40   | 60000   |
+      | 1:02:03 | 3723    |
+      | -5m     | 300     |
 
   Scenario: Bare number is interpreted as seconds
     Given the duration string "42"
@@ -38,3 +44,4 @@ Feature: Duration string parsing
     Given the duration string "banana"
     When I parse it
     Then a ValueError should be raised
+

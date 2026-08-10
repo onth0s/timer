@@ -120,3 +120,49 @@ def then_output_contains_text(ctx, text):
     assert text in ctx["result"].output, (
         f"Expected {text!r} in output. Actual output:\n{ctx['result'].output}"
     )
+
+
+def test_cli_target_time_and_dash_args(runner, tmp_path, monkeypatch):
+    p = tmp_path / "config.yaml"
+    monkeypatch.setattr(Config, "path", p)
+
+    from countdown import __main__ as main_mod
+
+    ran_seconds = []
+
+    def mock_run_countdown(total_seconds, **kwargs):
+        ran_seconds.append(total_seconds)
+
+    monkeypatch.setattr(main_mod, "run_countdown", mock_run_countdown)
+
+    from datetime import datetime
+
+    now = datetime(2026, 8, 10, 15, 0, 0)
+
+    class MockDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now
+
+    monkeypatch.setattr("countdown.timer.datetime", MockDateTime)
+
+    res1 = runner.invoke(main, ["-16:40"])
+    assert res1.exit_code == 0
+    assert ran_seconds[-1] == 6000
+
+    res2 = runner.invoke(main, ["-4:40PM"])
+    assert res2.exit_code == 0
+    assert ran_seconds[-1] == 6000
+
+    res3 = runner.invoke(main, [":01:20"])
+    assert res3.exit_code == 0
+    assert ran_seconds[-1] == 80
+
+    res4 = runner.invoke(main, ["4:40"])
+    assert res4.exit_code == 0
+    assert ran_seconds[-1] == 16800
+
+    res5 = runner.invoke(main, ["-5s"])
+    assert res5.exit_code == 0
+    assert ran_seconds[-1] == 5
+

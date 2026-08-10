@@ -222,11 +222,67 @@ run_countdown._original = run_countdown  # type: ignore[attr-defined]
 # ====================================================================
 
 
+def _fix_dash_args(cmd: click.Command, args: list[str]) -> list[str]:
+    """Insert '--' before positional arguments starting with '-' that aren't recognized options."""
+    if not args or "--" in args:
+        return args
+
+    opt_names = set()
+    for param in cmd.params:
+        if isinstance(param, click.Option):
+            opt_names.update(param.opts)
+            opt_names.update(param.secondary_opts)
+    opt_names.update({"-h", "--help"})
+
+    new_args = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg.startswith("-") and arg not in opt_names:
+            new_args.append("--")
+            new_args.extend(args[i:])
+            return new_args
+
+        new_args.append(arg)
+        for param in cmd.params:
+            if isinstance(param, click.Option) and (
+                arg in param.opts or arg in param.secondary_opts
+            ):
+                if not param.is_flag and i + 1 < len(args):
+                    i += 1
+                    new_args.append(args[i])
+                break
+        i += 1
+
+    return new_args
+
+
+class RunCommand(click.Command):
+    """Command subclass for `run` that pre-processes dash-prefixed duration arguments."""
+
+    def parse_args(self, ctx, args):
+        """Pre-process dash-prefixed positional arguments before Click option parsing."""
+        fixed_args = _fix_dash_args(self, args)
+        return super().parse_args(ctx, fixed_args)
+
+
 class SmartGroup(click.Group):
     """Group that forwards unmatched positional args to the ``run`` subcommand.
 
-    Lets ``timer 5`` work as an alias for ``timer run 5``.
+    Lets ``timer 5`` or ``timer -4:40PM`` work as an alias for ``timer run ...``.
     """
+
+    def parse_args(self, ctx, args):
+        """Forward non-subcommand arguments to `run` subcommand with dash fix applied."""
+        if args:
+            first = args[0]
+            group_opts = {"-h", "--help", "--version"}
+            if first not in self.commands and first not in group_opts:
+                run_cmd = self.commands.get("run")
+                if run_cmd:
+                    fixed_args = _fix_dash_args(run_cmd, args)
+                    return super().parse_args(ctx, ["run"] + fixed_args)
+        return super().parse_args(ctx, args)
 
     def resolve_command(self, ctx, args):
         """Route non-subcommand positional args to the run subcommand."""
@@ -251,7 +307,7 @@ def main(ctx):
         run_countdown(0, pulse_fn=pulse_fn, count_up=True)
 
 
-@main.command(name="run")
+@main.command(name="run", cls=RunCommand)
 @click.option(
     "--anim",
     type=click.Choice(list(VALID_ANIM_MODES)),

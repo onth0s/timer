@@ -2,6 +2,7 @@
 
 import re
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 
 @dataclass
@@ -50,6 +51,14 @@ DURATION_RE = re.compile(
 )
 
 
+TARGET_CLOCK_12_RE = re.compile(
+    r"^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([aA][mM]|[pP][mM])$"
+)
+TARGET_CLOCK_24_RE = re.compile(r"^(\d{1,2}):(\d{2})(?::(\d{2}))?$")
+LEADING_COLON_RE = re.compile(r"^:(\d{1,2})(?::(\d{2}))?$")
+COLON_DURATION_RE = re.compile(r"^(\d+):(\d{2})(?::(\d{2}))?$")
+
+
 def _build_components(*pairs):
     """Build components dict from (value, unit) pairs, omitting None/0."""
     comps = {}
@@ -59,19 +68,117 @@ def _build_components(*pairs):
     return comps
 
 
-def duration(string):
-    """Parse a duration string into a Duration.
+def duration(string, now=None):
+    """Parse a duration or target time string into a Duration.
 
     Supported formats:
-      - XhYmZs  (any unit optional)
-      - XhY     → Xh Ym       (bare after h)
-      - XmY     → Xm Ys       (bare after m)
-      - XhYmZ   → Xh Ym Zs    (bare after m in hours context)
-      - X       → X seconds   (bare number)
+      - Leading '-' prefix: Target clock time ("until this time"):
+          * -4:40PM, -04:40:00 PM (12-hour)
+          * -16:40, -16:40:30 (24-hour)
+          * -4:40 (04:40 clock time)
+          * Also strips '-' for standard duration strings (e.g. -5m -> 5m)
+      - Non '-' prefix: Amount of time:
+          * HH:MM (e.g. 4:40 -> 4h40m, 16:40 -> 16h40m)
+          * HH:MM:SS (e.g. 1:02:03 -> 1h2m3s)
+          * :MM:SS or :SS (e.g. :01:20 -> 1m20s, :45 -> 45s)
+          * XhYmZs, XhY, XmY, XhYmZ, X (bare number = seconds)
 
     Raises ValueError if the string cannot be parsed.
     """
-    match = DURATION_RE.search(string)
+    if not string:
+        raise ValueError(f"Invalid duration: {string}")
+
+    has_dash = string.startswith("-")
+    clean_str = string[1:] if has_dash else string
+
+    if has_dash:
+        # Check target clock time (12-hour format)
+        match_12 = TARGET_CLOCK_12_RE.match(clean_str)
+        if match_12:
+            h_str, m_str, s_str, ampm = match_12.groups()
+            hours = int(h_str)
+            minutes = int(m_str)
+            seconds = int(s_str) if s_str else 0
+            if hours < 1 or hours > 12 or minutes >= 60 or seconds >= 60:
+                raise ValueError(f"Invalid target time: {string}")
+            if ampm.upper() == "PM" and hours < 12:
+                hours += 12
+            elif ampm.upper() == "AM" and hours == 12:
+                hours = 0
+            if now is None:
+                now = datetime.now()
+            target_dt = now.replace(
+                hour=hours, minute=minutes, second=seconds, microsecond=0
+            )
+            if target_dt <= now:
+                target_dt += timedelta(days=1)
+            diff_sec = int((target_dt - now).total_seconds())
+            return compact(
+                Duration(total_seconds=diff_sec, components={"s": diff_sec})
+            )
+
+        # Check target clock time (24-hour format)
+        match_24 = TARGET_CLOCK_24_RE.match(clean_str)
+        if match_24:
+            h_str, m_str, s_str = match_24.groups()
+            hours = int(h_str)
+            minutes = int(m_str)
+            seconds = int(s_str) if s_str else 0
+            if hours >= 24 or minutes >= 60 or seconds >= 60:
+                raise ValueError(f"Invalid target time: {string}")
+            if now is None:
+                now = datetime.now()
+            target_dt = now.replace(
+                hour=hours, minute=minutes, second=seconds, microsecond=0
+            )
+            if target_dt <= now:
+                target_dt += timedelta(days=1)
+            diff_sec = int((target_dt - now).total_seconds())
+            return compact(
+                Duration(total_seconds=diff_sec, components={"s": diff_sec})
+            )
+
+    # Parsing amounts of time (without leading dash, or fallback after stripping leading dash)
+    # Check leading colon format (:MM:SS or :SS)
+    match_leading_colon = LEADING_COLON_RE.match(clean_str)
+    if match_leading_colon:
+        g1, g2 = match_leading_colon.groups()
+        if g2 is not None:
+            minutes, seconds = int(g1), int(g2)
+        else:
+            minutes, seconds = 0, int(g1)
+        if minutes >= 60 or seconds >= 60:
+            raise ValueError(f"Invalid duration: {string}")
+        total = minutes * 60 + seconds
+        return compact(
+            Duration(
+                total_seconds=total,
+                components=_build_components((minutes, "m"), (seconds, "s")),
+            )
+        )
+
+    # Check colon format (HH:MM or HH:MM:SS)
+    match_colon = COLON_DURATION_RE.match(clean_str)
+    if match_colon:
+        h_str, m_str, s_str = match_colon.groups()
+        hours = int(h_str)
+        minutes = int(m_str)
+        seconds = int(s_str) if s_str is not None else 0
+        if minutes >= 60 or seconds >= 60:
+            raise ValueError(f"Invalid duration: {string}")
+        total = hours * 3600 + minutes * 60 + seconds
+        pairs = [(hours, "h"), (minutes, "m")]
+        if s_str is not None:
+            pairs.append((seconds, "s"))
+        return compact(
+            Duration(
+                total_seconds=total,
+                components=_build_components(*pairs),
+            )
+        )
+
+    # Standard duration parsing
+    match = DURATION_RE.search(clean_str)
     if not match:
         raise ValueError(f"Invalid duration: {string}")
 
