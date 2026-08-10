@@ -249,7 +249,9 @@ def format_duration(dur):
     return "".join(parts) if parts else "0s"
 
 
-def get_number_lines(seconds, chars, *, show_hours=False, count_up=False):
+def get_number_lines(
+    seconds, chars, *, show_hours=False, count_up=False, raw_seconds=False
+):
     """Return list of lines which make large glyphs for the time display.
 
     Args:
@@ -257,6 +259,7 @@ def get_number_lines(seconds, chars, *, show_hours=False, count_up=False):
         chars: Dictionary of character glyphs to use for rendering
         show_hours: If True, format as HH:MM:SS instead of MM:SS
         count_up: If True, format dynamically (SS under 60s, MM:SS under 1h, HH:MM:SS at 1h+)
+        raw_seconds: If True, format as bare seconds (e.g. "300") without colons
 
     Returns:
         List of strings, one per line of the ASCII art display
@@ -264,7 +267,9 @@ def get_number_lines(seconds, chars, *, show_hours=False, count_up=False):
     digit_height = len(next(iter(chars.values())).splitlines())
     lines = [""] * digit_height
     seconds = max(0, int(seconds))
-    if count_up:
+    if raw_seconds:
+        time = f"{seconds}"
+    elif count_up:
         if seconds < 60:
             time = f"{seconds:02d}"
         elif seconds < 3600 and not show_hours:

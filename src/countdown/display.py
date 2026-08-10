@@ -125,9 +125,13 @@ def enable_ansi_escape_codes():  # pragma: no cover
         )
 
 
-def _format_time_string(seconds, *, show_hours=False, count_up=False):
+def _format_time_string(
+    seconds, *, show_hours=False, count_up=False, raw_seconds=False
+):
     """Return the formatted time string (SS, MM:SS, or HH:MM:SS) used for display."""
     seconds = max(0, int(seconds))
+    if raw_seconds:
+        return f"{seconds}"
     if count_up:
         if seconds < 60:
             return f"{seconds:02d}s" if show_hours is None else f"{seconds:02d}"

@@ -31,13 +31,16 @@ rich_click.USE_RICH_MARKUP = True
 rich_click.STYLE_HELPTEXT = ""
 
 
-def get_number_lines(seconds, *, show_hours=False, count_up=False):
+def get_number_lines(
+    seconds, *, show_hours=False, count_up=False, raw_seconds=False
+):
     """Return list of lines which make large glyphs for the time display."""
     return timer.get_number_lines(
         seconds,
         get_chars_for_terminal(seconds, show_hours=show_hours),
         show_hours=show_hours,
         count_up=count_up,
+        raw_seconds=raw_seconds,
     )
 
 
@@ -48,6 +51,8 @@ def run_countdown(
     *,
     show_hours=False,
     count_up=False,
+    raw_seconds=False,
+    dur_str=None,
 ):
     """Run the countdown or count-up timer.
 
@@ -57,6 +62,8 @@ def run_countdown(
         max_pulses: Maximum pulse iterations before exiting.
         show_hours: If True, display as HH:MM:SS.
         count_up: If True, count up starting from 0 (stopwatch mode).
+        raw_seconds: If True, display as bare seconds (e.g. 300) without colons.
+        dur_str: Explicit formatted duration string for summary display.
     """
     from rich.console import Console
     from rich.panel import Panel
@@ -82,7 +89,9 @@ def run_countdown(
             pause_accum = 0.0
             pause_start = None
             while True:
-                lines = get_number_lines(n, show_hours=show_hours, count_up=True)
+                lines = get_number_lines(
+                    n, show_hours=show_hours, count_up=True, raw_seconds=raw_seconds
+                )
                 print_full_screen(lines, paused=paused)
 
                 if check_for_keypress():
@@ -110,7 +119,9 @@ def run_countdown(
             sleep_until = time() + total_seconds
             pause_start = None
             while n >= 0 or paused:
-                lines = get_number_lines(n, show_hours=show_hours)
+                lines = get_number_lines(
+                    n, show_hours=show_hours, raw_seconds=raw_seconds
+                )
                 print_full_screen(lines, paused=paused)
 
                 if check_for_keypress():
@@ -125,7 +136,9 @@ def run_countdown(
                             pause_start = time()
                         paused = not paused
                         drain_keypresses()
-                        lines = get_number_lines(n, show_hours=show_hours)
+                        lines = get_number_lines(
+                            n, show_hours=show_hours, raw_seconds=raw_seconds
+                        )
                         print_full_screen(lines, paused=paused)
                     elif is_time_adjust_key(key):
                         adjustment = get_time_adjustment(key)
@@ -133,7 +146,9 @@ def run_countdown(
                         sleep_until += new_n - n
                         n = new_n
                         drain_keypresses()
-                        lines = get_number_lines(n, show_hours=show_hours)
+                        lines = get_number_lines(
+                            n, show_hours=show_hours, raw_seconds=raw_seconds
+                        )
                         print_full_screen(lines, paused=paused)
 
                 if not paused:
@@ -153,13 +168,23 @@ def run_countdown(
 
             if getattr(pulse_fn, "__name__", "") == "pulse_asciimatics":
                 print(SHOW_CURSOR + DISABLE_ALT_BUFFER, end="", flush=True)
-                pulse_fn(get_number_lines(0, show_hours=show_hours))
+                pulse_fn(
+                    get_number_lines(
+                        0, show_hours=show_hours, raw_seconds=raw_seconds
+                    )
+                )
                 exit_delay = time() - zero_epoch
                 return
 
             pulse_count = 0
-            while (max_pulses is None or pulse_count < max_pulses) and not check_for_keypress():
-                pulse_fn(get_number_lines(0, show_hours=show_hours))
+            while (
+                max_pulses is None or pulse_count < max_pulses
+            ) and not check_for_keypress():
+                pulse_fn(
+                    get_number_lines(
+                        0, show_hours=show_hours, raw_seconds=raw_seconds
+                    )
+                )
                 sleep(0.05)
                 pulse_count += 1
 
@@ -174,20 +199,25 @@ def run_countdown(
 
         # Persistent summary log using rich
         if count_up:
-            dur_str = timer.format_duration(
+            final_dur = dur_str or timer.format_duration(
                 timer.compact(timer.duration(f"{final_seconds}s"))
             )
             console.print(
                 Panel(
-                    f"[bold green]Timer ran for {dur_str}[/bold green]",
+                    f"[bold green]Timer ran for {final_dur}[/bold green]",
                     title="[bold cyan]Timer Summary[/bold cyan]",
                     expand=False,
                 )
             )
         else:
-            total_ran = timer.format_duration(
-                timer.compact(timer.duration(f"{total_seconds}s"))
-            )
+            if dur_str:
+                total_ran = dur_str
+            elif raw_seconds:
+                total_ran = f"{total_seconds}s"
+            else:
+                total_ran = timer.format_duration(
+                    timer.compact(timer.duration(f"{total_seconds}s"))
+                )
             if exit_delay is not None:
                 if exit_delay < 1:
                     delay_str = f"{exit_delay:.2f}s"
@@ -313,8 +343,14 @@ def main(ctx):
     type=click.Choice(list(VALID_ANIM_MODES)),
     help="Override animation mode for this run.",
 )
+@click.option(
+    "--raw",
+    "-r",
+    is_flag=True,
+    help="Force raw seconds display.",
+)
 @click.argument("duration", required=False)
-def countdown(anim, duration):
+def countdown(anim, raw, duration):
     r"""Run the countdown timer for the given DURATION.
 
     DURATION supports hours (h), minutes (m), and seconds (s).
@@ -331,7 +367,7 @@ def countdown(anim, duration):
         raise click.UsageError(str(exc)) from exc
 
     if duration is None:
-        run_countdown(0, pulse_fn=pulse_fn, count_up=True)
+        run_countdown(0, pulse_fn=pulse_fn, count_up=True, raw_seconds=raw)
         return
 
     try:
@@ -339,7 +375,10 @@ def countdown(anim, duration):
     except ValueError as exc:
         raise click.UsageError(str(exc)) from exc
 
-    if timer_mod.needs_prompt(dur):
+    raw_seconds = raw
+    dur_str = None
+
+    if not raw and timer_mod.needs_prompt(dur):
         compact_dur = timer_mod.compact(dur)
         old = timer_mod.format_duration(dur)
         new = timer_mod.format_duration(compact_dur)
@@ -354,9 +393,21 @@ def countdown(anim, duration):
         )
         if choice == "1":
             dur = compact_dur
+            dur_str = new
+        else:
+            raw_seconds = True
+            dur_str = old
+    else:
+        dur_str = f"{dur.total_seconds}s" if raw else timer_mod.format_duration(dur)
 
     show_hours = "h" in dur.components
-    run_countdown(dur.total_seconds, pulse_fn=pulse_fn, show_hours=show_hours)
+    run_countdown(
+        dur.total_seconds,
+        pulse_fn=pulse_fn,
+        show_hours=show_hours,
+        raw_seconds=raw_seconds,
+        dur_str=dur_str,
+    )
 
 
 @main.group()

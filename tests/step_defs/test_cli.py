@@ -166,3 +166,53 @@ def test_cli_target_time_and_dash_args(runner, tmp_path, monkeypatch):
     assert res5.exit_code == 0
     assert ran_seconds[-1] == 5
 
+
+def test_prompt_choice_raw_seconds(runner, tmp_path, monkeypatch):
+    p = tmp_path / "config.yaml"
+    monkeypatch.setattr(Config, "path", p)
+
+    from countdown import __main__ as main_mod
+
+    captured_kwargs = []
+
+    def mock_run_countdown(total_seconds, **kwargs):
+        captured_kwargs.append(kwargs)
+
+    monkeypatch.setattr(main_mod, "run_countdown", mock_run_countdown)
+
+    res1 = runner.invoke(main, ["300s"], input="1\n")
+    assert res1.exit_code == 0
+    assert captured_kwargs[-1]["raw_seconds"] is False
+    assert captured_kwargs[-1]["dur_str"] == "5m"
+
+    res2 = runner.invoke(main, ["300s"], input="2\n")
+    assert res2.exit_code == 0
+    assert captured_kwargs[-1]["raw_seconds"] is True
+    assert captured_kwargs[-1]["dur_str"] == "300s"
+
+
+def test_raw_flag_option(runner, tmp_path, monkeypatch):
+    p = tmp_path / "config.yaml"
+    monkeypatch.setattr(Config, "path", p)
+
+    from countdown import __main__ as main_mod
+
+    captured_kwargs = []
+
+    def mock_run_countdown(total_seconds, **kwargs):
+        captured_kwargs.append(kwargs)
+
+    monkeypatch.setattr(main_mod, "run_countdown", mock_run_countdown)
+
+    res1 = runner.invoke(main, ["--raw", "5m"])
+    assert res1.exit_code == 0
+    assert captured_kwargs[-1]["raw_seconds"] is True
+    assert captured_kwargs[-1]["dur_str"] == "300s"
+
+    res2 = runner.invoke(main, ["-r", "5m"])
+    assert res2.exit_code == 0
+    assert captured_kwargs[-1]["raw_seconds"] is True
+    assert captured_kwargs[-1]["dur_str"] == "300s"
+
+
+

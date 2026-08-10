@@ -54,3 +54,12 @@ def then_format_mmss(ctx):
 @then("the format should be HH:MM:SS")
 def then_format_hhmmss(ctx):
     assert ctx["time_str"].count(":") == 2, "Expected two colons for HH:MM:SS"
+
+
+def test_raw_seconds_display():
+    lines = timer.get_number_lines(300, _TEST_CHARS, raw_seconds=True)
+    assert lines is not None
+    from countdown.display import _format_time_string
+
+    assert _format_time_string(300, raw_seconds=True) == "300"
+

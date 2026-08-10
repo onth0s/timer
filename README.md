@@ -9,9 +9,9 @@ timer 6m30s        # count down from 6 minutes 30 seconds
 timer               # count up (stopwatch mode)
 ```
 
-## Duration formats
+## Duration & Target Time formats
 
-A bare number counts seconds. Use `h`, `m`, and `s` suffixes:
+A bare number counts seconds. Use `h`, `m`, and `s` suffixes, colon notation, or target clock times:
 
 ```bash
 timer 90            # 90 seconds
@@ -20,6 +20,26 @@ timer 1m30s         # 1 minute 30 seconds
 timer 1h            # 1 hour
 timer 1h30          # 1 hour 30 minutes (short form)
 timer 2m45          # 2 minutes 45 seconds (short form)
+timer 4:40          # 4 hours 40 minutes (HH:MM colon format)
+timer 1:02:03       # 1 hour 2 minutes 3 seconds (HH:MM:SS format)
+timer :01:20        # 1 minute 20 seconds (:MM:SS format)
+timer -4:40PM       # Target time: count down until 4:40 PM
+timer -16:40        # Target time: count down until 16:40 (24h clock)
+```
+
+### Target Times (`-` prefix)
+
+A leading `-` prefix indicates a **target clock time** to count down until:
+
+- `timer -4:40PM` / `timer -16:40`: Counts down to the specified time today (or tomorrow if the target time has passed).
+
+### Raw Seconds Display (`--raw` / `-r`)
+
+Force raw bare seconds display without colons:
+
+```bash
+timer --raw 5m      # Counts down as 300, 299, 298... instead of 05:00
+timer -r 300s       # Equivalent
 ```
 
 ## Stopwatch mode
@@ -112,6 +132,7 @@ Error: Invalid anim mode: 'neon-rave'. Valid modes: ansi, rich, drawille, smooth
 | `timer DURATION`              | Count down (e.g. `timer 5`, `timer 1m30s`)       |
 | `timer`                       | Count up from 0 (stopwatch)                      |
 | `timer run [DURATION]`        | Explicit run subcommand; no duration = stopwatch |
+| `timer --raw DURATION`        | Force raw seconds display (e.g. `timer --raw 5m`)|
 | `timer --anim MODE DURATION`  | Override animation for this run                  |
 | `timer showcase [DURATION]`   | Cycle through every pulse animation mode         |
 | `timer config init`           | Create default `config.yaml`                     |
