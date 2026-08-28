@@ -1,5 +1,7 @@
 """Command-line interface."""
 
+import difflib
+
 import click
 import rich_click  # noqa: F401 — patches Click for Rich-styled --help
 
@@ -103,6 +105,42 @@ def _fix_dash_args(cmd: click.Command, args: list[str]) -> list[str]:
     return new_args
 
 
+def _is_duration_token(token: str) -> bool:
+    """Return True if ``token`` parses as a timer duration."""
+    try:
+        timer.duration(token)
+    except ValueError:
+        return False
+    return True
+
+
+def _command_suggestions(token: str, commands: dict) -> list[str]:
+    """Return close command-name matches for ``token``, capped at 3."""
+    return difflib.get_close_matches(token, commands, n=3, cutoff=0.5)
+
+
+def _raise_if_command_typo(token: str, commands: dict) -> None:
+    """Raise a "Did you mean ...?" UsageError when ``token`` looks like a typo.
+
+    Only fires for tokens that aren't valid durations and fuzzy-match a known
+    command name, so `timer 5` / `timer -4:40PM` still route to ``run`` while
+    `timer sch` gets pointed at ``schedule``.
+    """
+    if _is_duration_token(token):
+        return
+    suggestions = _command_suggestions(token, commands)
+    if not suggestions:
+        return
+    if len(suggestions) == 1:
+        raise click.UsageError(
+            f"No such command {token!r}. Did you mean '{suggestions[0]}'?"
+        )
+    extra = "\n".join(f"  {c}" for c in suggestions)
+    raise click.UsageError(
+        f"No such command {token!r}. Did you mean one of these?\n{extra}"
+    )
+
+
 class RunCommand(click.Command):
     """Command subclass for `run` that pre-processes dash-prefixed duration arguments."""
 
@@ -124,6 +162,7 @@ class SmartGroup(click.Group):
             first = args[0]
             group_opts = {"-h", "--help", "--version"}
             if first not in self.commands and first not in group_opts:
+                _raise_if_command_typo(first, self.commands)
                 run_cmd = self.commands.get("run")
                 if run_cmd:
                     fixed_args = _fix_dash_args(run_cmd, args)
@@ -131,8 +170,15 @@ class SmartGroup(click.Group):
         return super().parse_args(ctx, args)
 
     def resolve_command(self, ctx, args):
-        """Route non-subcommand positional args to the run subcommand."""
+        """Route non-subcommand positional args to the run subcommand.
+
+        Unknown tokens are forwarded to ``run`` as a duration so ``timer 5`` /
+        ``timer -4:40PM`` work as convenience aliases. If the token is *not* a
+        valid duration but looks like a mistyped command name, surface a
+        "Did you mean ...?" suggestion instead of a cryptic duration error.
+        """
         if args and args[0] not in self.commands:
+            _raise_if_command_typo(args[0], self.commands)
             return "run", self.commands["run"], args
         return super().resolve_command(ctx, args)
 

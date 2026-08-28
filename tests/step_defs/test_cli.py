@@ -213,3 +213,50 @@ def test_raw_flag_option(runner, tmp_path, monkeypatch):
     assert res2.exit_code == 0
     assert captured_kwargs[-1]["raw_seconds"] is True
     assert captured_kwargs[-1]["dur_str"] == "300s"
+
+
+def test_unknown_command_suggests_close_match(runner, tmp_path, monkeypatch):
+    p = tmp_path / "config.yaml"
+    monkeypatch.setattr(Config, "path", p)
+
+    res1 = runner.invoke(main, ["sch"])
+    assert res1.exit_code != 0
+    assert "No such command 'sch'" in res1.output
+    assert "schedule" in res1.output
+    assert "Did you mean" in res1.output
+
+    res2 = runner.invoke(main, ["show"])
+    assert res2.exit_code != 0
+    assert "No such command 'show'" in res2.output
+    assert "showcase" in res2.output
+
+
+def test_non_duration_unknown_keeps_invalid_duration_error(
+    runner, tmp_path, monkeypatch
+):
+    p = tmp_path / "config.yaml"
+    monkeypatch.setattr(Config, "path", p)
+
+    res = runner.invoke(main, ["99z"])
+    assert res.exit_code != 0
+    assert "Invalid duration" in res.output
+
+
+def test_abbreviated_command_still_routes_real_durations(
+    runner, tmp_path, monkeypatch
+):
+    p = tmp_path / "config.yaml"
+    monkeypatch.setattr(Config, "path", p)
+
+    from countdown import __main__ as main_mod
+
+    ran_seconds = []
+
+    def mock_run_countdown(total_seconds, **kwargs):
+        ran_seconds.append(total_seconds)
+
+    monkeypatch.setattr(main_mod, "run_countdown", mock_run_countdown)
+
+    res = runner.invoke(main, ["5"])
+    assert res.exit_code == 0
+    assert ran_seconds == [5]
