@@ -44,7 +44,9 @@ def then_total_seconds(ctx, seconds):
 
 @then("a ValueError should be raised")
 def then_value_error(ctx):
-    assert ctx["error"] is not None, "Expected a ValueError but no error was raised"
+    assert ctx["error"] is not None, (
+        "Expected a ValueError but no error was raised"
+    )
     assert isinstance(ctx["error"], ValueError)
 
 
@@ -63,4 +65,3 @@ def test_target_time_parsing():
     # -14:00 (past) -> tomorrow 14:00 = 23 hours = 82800 seconds
     d3 = timer.duration("-14:00", now=now)
     assert d3.total_seconds == 82800
-

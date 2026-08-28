@@ -59,7 +59,9 @@ def then_uniform_width(ctx):
 
 
 @given(
-    parsers.parse("the consecutive time values {a:d} and {b:d} rendered as {mode}"),
+    parsers.parse(
+        "the consecutive time values {a:d} and {b:d} rendered as {mode}"
+    ),
     target_fixture="ctx",
 )
 def given_consecutive_jitter_values(a, b, mode):

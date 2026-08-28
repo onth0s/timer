@@ -59,7 +59,10 @@ def then_value_error_options(ctx):
     assert "Valid modes:" in str(ctx["error"])
 
 
-@given(parsers.parse('a config file containing anim "{mode}"'), target_fixture="ctx")
+@given(
+    parsers.parse('a config file containing anim "{mode}"'),
+    target_fixture="ctx",
+)
 def given_config_file_with_anim(mode, tmp_path, monkeypatch):
     p = tmp_path / "config.yaml"
     p.write_text(f"anim: {mode}\n", encoding="utf-8")

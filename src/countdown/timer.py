@@ -289,6 +289,31 @@ def format_duration(dur):
     return "".join(parts) if parts else "0s"
 
 
+def _format_time_string(
+    seconds, *, show_hours=False, count_up=False, raw_seconds=False
+):
+    """Return the display time string (SS, MM:SS, or HH:MM:SS) for ``seconds``."""
+    seconds = max(0, int(seconds))
+    if raw_seconds:
+        return f"{seconds}"
+    if count_up:
+        if seconds < 60:
+            return f"{seconds:02d}"
+        elif seconds < 3600 and not show_hours:
+            minutes, secs = divmod(seconds, 60)
+            return f"{minutes:02d}:{secs:02d}"
+        else:
+            hours, rest = divmod(seconds, 3600)
+            minutes, secs = divmod(rest, 60)
+            return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    if show_hours:
+        hours, rest = divmod(seconds, 3600)
+        minutes, secs = divmod(rest, 60)
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    minutes, secs = divmod(seconds, 60)
+    return f"{minutes:02d}:{secs:02d}"
+
+
 def get_number_lines(
     seconds, chars, *, show_hours=False, count_up=False, raw_seconds=False
 ):
@@ -307,25 +332,12 @@ def get_number_lines(
     digit_height = len(next(iter(chars.values())).splitlines())
     lines = [""] * digit_height
     seconds = max(0, int(seconds))
-    if raw_seconds:
-        time = f"{seconds}"
-    elif count_up:
-        if seconds < 60:
-            time = f"{seconds:02d}"
-        elif seconds < 3600 and not show_hours:
-            minutes, secs = divmod(seconds, 60)
-            time = f"{minutes:02d}:{secs:02d}"
-        else:
-            hours, rest = divmod(seconds, 3600)
-            minutes, secs = divmod(rest, 60)
-            time = f"{hours:02d}:{minutes:02d}:{secs:02d}"
-    elif show_hours:
-        hours, rest = divmod(seconds, 3600)
-        minutes, secs = divmod(abs(rest), 60)
-        time = f"{hours:02d}:{minutes:02d}:{secs:02d}"
-    else:
-        minutes, secs = divmod(seconds, 60)
-        time = f"{minutes:02d}:{secs:02d}"
+    time = _format_time_string(
+        seconds,
+        show_hours=show_hours,
+        count_up=count_up,
+        raw_seconds=raw_seconds,
+    )
 
     for j, char in enumerate(time):
         if char not in chars:

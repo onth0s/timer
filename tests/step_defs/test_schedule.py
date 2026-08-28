@@ -30,8 +30,8 @@ def sched(tmp_path, monkeypatch):
     monkeypatch.setattr(Config, "path", tmp_path / "config.yaml")
     clock = FakeClock()
     clock.t = NOW
-    monkeypatch.setattr("countdown.__main__.time", clock.time)
-    monkeypatch.setattr("countdown.__main__.sleep", clock.sleep)
+    monkeypatch.setattr("countdown.schedules_cli.time", clock.time)
+    monkeypatch.setattr("countdown.schedules_cli.sleep", clock.sleep)
     return SimpleNamespace(
         base=base, home=home, clock=clock, runner=CliRunner()
     )
@@ -46,7 +46,9 @@ def patch_live_keys(sched, monkeypatch, at=2.0):
     """Exit the live view when the fake clock advances ``at`` seconds."""
     keys = MockKeys(sched.clock)
     keys.queue_at(sched.clock.t + at, "q")
-    monkeypatch.setattr("countdown.__main__.check_for_keypress", keys.check)
+    monkeypatch.setattr(
+        "countdown.schedules_cli.check_for_keypress", keys.check
+    )
 
 
 # ---------------------------------------------------------------------------

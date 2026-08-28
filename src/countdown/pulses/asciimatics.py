@@ -90,14 +90,21 @@ def _run_screen(lines, duration, label=None):
             elapsed = time() - start
             if elapsed >= duration:
                 return
-            screen.clear_buffer(fg=Screen.COLOUR_WHITE, attr=Screen.A_NORMAL, bg=Screen.COLOUR_BLACK)
+            screen.clear_buffer(
+                fg=Screen.COLOUR_WHITE,
+                attr=Screen.A_NORMAL,
+                bg=Screen.COLOUR_BLACK,
+            )
             effect.update(0)
             screen.refresh()
             # Use wait_for_input to poll for q without blocking forever
             remaining = max(0.05, duration - elapsed)
             if screen.wait_for_input(remaining):
                 key = screen.get_event()
-                if key is not None and getattr(key, "key_code", None) in (ord("q"), ord("Q")):
+                if key is not None and getattr(key, "key_code", None) in (
+                    ord("q"),
+                    ord("Q"),
+                ):
                     return
 
     Screen.wrapper(_demo)

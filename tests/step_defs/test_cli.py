@@ -47,23 +47,21 @@ def given_cli_invoked_bare(runner, tmp_path, monkeypatch):
 
 @given("the clock is mocked (integer counter, no real sleep)")
 def given_clock_mocked(ctx, monkeypatch):
-    monkeypatch.setattr("countdown.__main__.time", ctx["clock"].time)
-    monkeypatch.setattr("countdown.__main__.sleep", ctx["clock"].sleep)
+    monkeypatch.setattr("countdown.loop.STDCLOCK", ctx["clock"])
 
 
 @given("the clock is mocked")
 def given_clock_mocked_short(ctx, monkeypatch):
-    monkeypatch.setattr("countdown.__main__.time", ctx["clock"].time)
-    monkeypatch.setattr("countdown.__main__.sleep", ctx["clock"].sleep)
+    monkeypatch.setattr("countdown.loop.STDCLOCK", ctx["clock"])
 
 
 @given("keypresses are mocked to never fire", target_fixture="ctx")
 def given_no_keypresses(ctx, monkeypatch):
-    monkeypatch.setattr("countdown.__main__.check_for_keypress", lambda: False)
+    monkeypatch.setattr("countdown.loop.check_for_keypress", lambda: False)
     monkeypatch.setattr("countdown.terminal.check_for_keypress", lambda: False)
-    monkeypatch.setattr("countdown.__main__.setup_terminal", lambda: None)
-    monkeypatch.setattr("countdown.__main__.restore_terminal", lambda s: None)
-    monkeypatch.setattr("countdown.__main__.enable_ansi_escape_codes", lambda: None)
+    monkeypatch.setattr("countdown.loop.setup_terminal", lambda: None)
+    monkeypatch.setattr("countdown.loop.restore_terminal", lambda s: None)
+    monkeypatch.setattr("countdown.loop.enable_ansi_escape_codes", lambda: None)
 
     original_rc = ctx.get("_original_rc")
     if not original_rc:
@@ -72,7 +70,9 @@ def given_no_keypresses(ctx, monkeypatch):
         orig = main_mod.run_countdown
 
         def wrapped(total_seconds, pulse_fn=None, max_pulses=1, **kwargs):
-            return orig(total_seconds, pulse_fn=pulse_fn, max_pulses=1, **kwargs)
+            return orig(
+                total_seconds, pulse_fn=pulse_fn, max_pulses=1, **kwargs
+            )
 
         monkeypatch.setattr(main_mod, "run_countdown", wrapped)
     return ctx
@@ -81,12 +81,12 @@ def given_no_keypresses(ctx, monkeypatch):
 @given(parsers.parse("a quit keypress fires after {ticks:d} ticks"))
 def given_quit_after_ticks_cli(ctx, ticks, monkeypatch):
     ctx["keys"].queue_at(t=float(ticks), key="q")
-    monkeypatch.setattr("countdown.__main__.check_for_keypress", ctx["keys"].check)
-    monkeypatch.setattr("countdown.__main__.read_key", ctx["keys"].read)
-    monkeypatch.setattr("countdown.__main__.drain_keypresses", lambda: None)
-    monkeypatch.setattr("countdown.__main__.setup_terminal", lambda: None)
-    monkeypatch.setattr("countdown.__main__.restore_terminal", lambda s: None)
-    monkeypatch.setattr("countdown.__main__.enable_ansi_escape_codes", lambda: None)
+    monkeypatch.setattr("countdown.loop.check_for_keypress", ctx["keys"].check)
+    monkeypatch.setattr("countdown.loop.read_key", ctx["keys"].read)
+    monkeypatch.setattr("countdown.loop.drain_keypresses", lambda: None)
+    monkeypatch.setattr("countdown.loop.setup_terminal", lambda: None)
+    monkeypatch.setattr("countdown.loop.restore_terminal", lambda s: None)
+    monkeypatch.setattr("countdown.loop.enable_ansi_escape_codes", lambda: None)
 
 
 @when("the command completes")
@@ -213,6 +213,3 @@ def test_raw_flag_option(runner, tmp_path, monkeypatch):
     assert res2.exit_code == 0
     assert captured_kwargs[-1]["raw_seconds"] is True
     assert captured_kwargs[-1]["dur_str"] == "300s"
-
-
-

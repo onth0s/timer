@@ -44,11 +44,15 @@ def get_terminal_size(fallback=(80, 24)):
             from ctypes import create_string_buffer, windll
 
             h = windll.kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
-            csbi = create_string_buffer(22)  # sizeof(CONSOLE_SCREEN_BUFFER_INFO)
+            csbi = create_string_buffer(
+                22
+            )  # sizeof(CONSOLE_SCREEN_BUFFER_INFO)
             if windll.kernel32.GetConsoleScreenBufferInfo(h, csbi):
                 import struct
 
-                left, top, right, bottom = struct.unpack_from("HHHH", csbi, offset=10)
+                left, top, right, bottom = struct.unpack_from(
+                    "HHHH", csbi, offset=10
+                )
                 tw = right - left + 1
                 th = bottom - top + 1
                 if tw > 0 and th > 0:
@@ -128,26 +132,20 @@ def enable_ansi_escape_codes():  # pragma: no cover
 def _format_time_string(
     seconds, *, show_hours=False, count_up=False, raw_seconds=False
 ):
-    """Return the formatted time string (SS, MM:SS, or HH:MM:SS) used for display."""
-    seconds = max(0, int(seconds))
-    if raw_seconds:
-        return f"{seconds}"
-    if count_up:
-        if seconds < 60:
-            return f"{seconds:02d}s" if show_hours is None else f"{seconds:02d}"
-        elif seconds < 3600 and not show_hours:
-            minutes, secs = divmod(seconds, 60)
-            return f"{minutes:02d}:{secs:02d}"
-        else:
-            hours, rest = divmod(seconds, 3600)
-            minutes, secs = divmod(rest, 60)
-            return f"{hours:02d}:{minutes:02d}:{secs:02d}"
-    if show_hours:
-        hours, rest = divmod(seconds, 3600)
-        minutes, secs = divmod(rest, 60)
-        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
-    minutes, secs = divmod(seconds, 60)
-    return f"{minutes:02d}:{secs:02d}"
+    """Return the display time string (SS, MM:SS, or HH:MM:SS).
+
+    Compatibility re-export of the canonical helper in ``timer`` (kept so
+    ``tests.step_defs.test_countdown_display`` / ``test_countup_display`` can
+    import it from here).
+    """
+    from . import timer as timer_mod
+
+    return timer_mod._format_time_string(
+        seconds,
+        show_hours=show_hours,
+        count_up=count_up,
+        raw_seconds=raw_seconds,
+    )
 
 
 def get_required_width(chars, time_string, *, show_hours=False):
@@ -183,7 +181,9 @@ def get_chars_for_terminal(seconds=0, *, show_hours=False):
     time_string = _format_time_string(seconds, show_hours=show_hours)
     for size in DIGIT_SIZES:
         chars = CHARS_BY_SIZE[size]
-        required_width = get_required_width(chars, time_string, show_hours=show_hours)
+        required_width = get_required_width(
+            chars, time_string, show_hours=show_hours
+        )
         # For size 3 (smallest multi-line), allow it without padding
         # For larger sizes, require 1 line of padding on top and bottom (2 total)
         padding_needed = 0 if size == 3 else 2
@@ -205,12 +205,8 @@ def print_full_screen(lines, paused=False):
         content_height += 2  # Blank line + PAUSED text
         show_pause_text = True
 
-    # Calculate vertical padding (ensure it doesn't go negative)
-    vertical_padding = max(0, (term_height - content_height) // 2)
-
-    # Calculate horizontal padding for timer
-    max_line_width = max(len(line) for line in lines)
-    horizontal_padding = max(0, (term_width - max_line_width) // 2)
+    v_pad = "\n" * vertical_padding(content_height, term_height)
+    h_pad = " " * horizontal_padding(lines, term_width)
 
     # Apply red color to timer if paused
     if paused:
@@ -219,14 +215,11 @@ def print_full_screen(lines, paused=False):
         colored_lines = lines
 
     # Build the output
-    vertical_pad = "\n" * vertical_padding
-    padded_text = "\n".join(
-        " " * horizontal_padding + line for line in colored_lines
-    )
+    padded_text = "\n".join(h_pad + line for line in colored_lines)
 
     if show_pause_text:
         pause_text = "PAUSED - Press any key to resume"
         pause_padding = " " * max(0, (term_width - len(pause_text)) // 2)
         padded_text += "\n\n" + pause_padding + pause_text
 
-    print(CLEAR + vertical_pad + padded_text, flush=True, end="")
+    print(CLEAR + v_pad + padded_text, flush=True, end="")

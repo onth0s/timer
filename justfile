@@ -1,3 +1,5 @@
+set shell := ["pwsh", "-NoProfile", "-Command"]
+
 # Show available commands
 _default:
     @printf 'Automation tasks:\n'

@@ -18,29 +18,34 @@ scenarios("countdown_loop.feature")
 # ---------------------------------------------------------------------------
 
 
-def _run_countdown_mocked(total_seconds, clock, keys, monkeypatch, *, max_pulses=0):
+def _run_countdown_mocked(
+    total_seconds, clock, keys, monkeypatch, *, max_pulses=0
+):
     """Run run_countdown with every OS-touching call replaced by mocks.
 
     Returns the list of integers that were 'displayed' during the loop.
     """
     displayed: list[int] = []
 
-    monkeypatch.setattr("countdown.__main__.time", clock.time)
-    monkeypatch.setattr("countdown.__main__.sleep", clock.sleep)
+    monkeypatch.setattr("countdown.loop.STDCLOCK", clock)
     monkeypatch.setattr(
-        "countdown.__main__.get_number_lines",
-        lambda s, **kw: [str(int(s))],
+        "countdown.timer.get_number_lines",
+        lambda s, _chars, **kw: [str(int(s))],
     )
     monkeypatch.setattr(
-        "countdown.__main__.print_full_screen",
+        "countdown.loop.get_chars_for_terminal",
+        lambda *a, **kw: {},
+    )
+    monkeypatch.setattr(
+        "countdown.loop.print_full_screen",
         lambda lines, **kw: displayed.append(int(lines[0])),
     )
-    monkeypatch.setattr("countdown.__main__.check_for_keypress", keys.check)
-    monkeypatch.setattr("countdown.__main__.read_key", keys.read)
-    monkeypatch.setattr("countdown.__main__.drain_keypresses", lambda: None)
-    monkeypatch.setattr("countdown.__main__.setup_terminal", lambda: None)
-    monkeypatch.setattr("countdown.__main__.restore_terminal", lambda s: None)
-    monkeypatch.setattr("countdown.__main__.enable_ansi_escape_codes", lambda: None)
+    monkeypatch.setattr("countdown.loop.check_for_keypress", keys.check)
+    monkeypatch.setattr("countdown.loop.read_key", keys.read)
+    monkeypatch.setattr("countdown.loop.drain_keypresses", lambda: None)
+    monkeypatch.setattr("countdown.loop.setup_terminal", lambda: None)
+    monkeypatch.setattr("countdown.loop.restore_terminal", lambda s: None)
+    monkeypatch.setattr("countdown.loop.enable_ansi_escape_codes", lambda: None)
 
     from unittest.mock import patch
 
@@ -98,7 +103,9 @@ def given_no_real_time():
 # ---------------------------------------------------------------------------
 
 
-@given(parsers.parse("a countdown of {seconds:d} seconds"), target_fixture="ctx")
+@given(
+    parsers.parse("a countdown of {seconds:d} seconds"), target_fixture="ctx"
+)
 def given_countdown_seconds(seconds, clock):
     keys = MockKeys(clock)
     return {"total": seconds, "clock": clock, "keys": keys, "displayed": []}
@@ -121,7 +128,9 @@ def then_displayed_sequence(ctx, sequence):
 
 @then("the minimum displayed value should be 0")
 def then_min_is_zero(ctx):
-    assert 0 in ctx["displayed"], f"0 not reached — displayed: {ctx['displayed']}"
+    assert 0 in ctx["displayed"], (
+        f"0 not reached — displayed: {ctx['displayed']}"
+    )
     assert min(ctx["displayed"]) == 0
 
 
@@ -162,7 +171,11 @@ def given_pause_at_second(ctx, n):
     ctx["keys"].queue_at(t=float(t_trigger), key=" ")
 
 
-@given(parsers.parse("a resume keypress is queued after the equivalent of {s:d} fake seconds"))
+@given(
+    parsers.parse(
+        "a resume keypress is queued after the equivalent of {s:d} fake seconds"
+    )
+)
 def given_resume_after_seconds(ctx, s):
     last_t = max(t for t, _ in ctx["keys"]._presses)
     ctx["keys"].queue_at(t=last_t + float(s), key=" ")
@@ -170,7 +183,9 @@ def given_resume_after_seconds(ctx, s):
 
 @then("the seconds displayed should still reach 0")
 def then_reaches_zero(ctx):
-    assert 0 in ctx["displayed"], f"0 not reached — displayed: {ctx['displayed']}"
+    assert 0 in ctx["displayed"], (
+        f"0 not reached — displayed: {ctx['displayed']}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +211,11 @@ def then_more_than_base(ctx, base):
 # ---------------------------------------------------------------------------
 
 
-@then(parsers.parse("the countdown should end sooner than {total:d} seconds from start"))
+@then(
+    parsers.parse(
+        "the countdown should end sooner than {total:d} seconds from start"
+    )
+)
 def then_ends_sooner(ctx, total):
     assert ctx["clock"].t < total, (
         f"Expected clock < {total} at exit, got {ctx['clock'].t}"

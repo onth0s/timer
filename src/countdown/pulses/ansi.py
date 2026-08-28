@@ -45,7 +45,9 @@ def style_lines(lines, phase):
             if ch == " ":
                 styled.append(ch)
                 continue
-            intensity = math.sin(phase - ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5 * 0.6)
+            intensity = math.sin(
+                phase - ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5 * 0.6
+            )
             level = int((intensity + 1) / 2 * (len(_INTENSITY_STYLES) - 1))
             level = max(0, min(len(_INTENSITY_STYLES) - 1, level))
             styled.append(_INTENSITY_STYLES[level] + ch + _RESET)
@@ -67,7 +69,9 @@ def pulse_ansi(lines):
     if _START[0] is None:
         _START[0] = time()
     phase = (time() - _START[0]) * 3
-    print(FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end="")
+    print(
+        FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end=""
+    )
 
 
 def reset_state():

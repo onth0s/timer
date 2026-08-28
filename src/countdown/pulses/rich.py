@@ -31,7 +31,9 @@ def _idx_for_cell(x, y, cx, cy, hue):
     Index range 16-231 gives 6 levels per channel — enough variation to
     keep the radial wave looking rich while keeping escapes short.
     """
-    intensity = radial_wave(x, y, cx, cy, hue / 360 * (2 * math.pi), frequency=0.5)
+    intensity = radial_wave(
+        x, y, cx, cy, hue / 360 * (2 * math.pi), frequency=0.5
+    )
     lightness = 0.4 + 0.4 * (intensity + 1) / 2
     r, g, b = hsl_to_rgb(hue, 0.9, lightness)
     ri = min(5, int(r / 43))
@@ -108,81 +110,11 @@ def pulse_rich(lines):
     if _START[0] is None:
         _START[0] = time()
     phase = (time() - _START[0]) * 4
-    print(FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end="")
+    print(
+        FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end=""
+    )
 
 
 def reset_state():
     """Reset pulse phase (for tests)."""
     _START[0] = None
-
-
-# ---------------------------------------------------------------------------
-# Legacy Rich-object API — kept for tests that exercise build_wave_renderable
-# and the Text-based helpers.  Not used by the pulse-hot-path above.
-# ---------------------------------------------------------------------------
-
-from rich.console import Group  # noqa: E402
-from rich.text import Text  # noqa: E402
-
-
-def _style_row(line, y, cx, cy, hue):
-    """Style a single glyph line as a Rich Text with per-cell RGB color."""
-    styled = Text()
-    for x, ch in enumerate(line):
-        if ch == " ":
-            styled.append(ch)
-            continue
-        intensity = radial_wave(x, y, cx, cy, hue / 360 * (2 * math.pi), frequency=0.5)
-        lightness = 0.4 + 0.4 * (intensity + 1) / 2
-        r, g, b = hsl_to_rgb(hue, 0.9, lightness)
-        hex_color = f"#{r:02x}{g:02x}{b:02x}"
-        bold = intensity > 0.4
-        style = f"{'bold ' if bold else ''}{hex_color}"
-        styled.append(ch, style=style)
-    return styled
-
-
-def _h_pad(count):
-    """Return a Text of ``count`` spaces."""
-    return Text(" " * count)
-
-
-def build_wave_renderable(lines, phase, term_width=None, term_height=None):
-    """Return a Rich Group of styled Text rows for the wave frame.
-
-    Each row is a distinct Text so ``Live`` repaints the full grid cleanly
-    without inheriting stale positions from the previous frame. When
-    ``term_width`` is given the rows are horizontally centered via leading
-    padding so the glyph block sits in the middle of the terminal.
-    """
-    content_height = len(lines)
-    content_widths = [len(line.rstrip()) for line in lines]
-    max_width = max(content_widths) if content_widths else 0
-
-    cx = max_width / 2
-    cy = content_height / 2
-    hue = (phase / (2 * math.pi)) * 360 % 360
-
-    if term_width is not None:
-        h_pad = max(0, (term_width - max_width) // 2)
-        pad = Text(" " * h_pad)
-    else:
-        pad = None
-
-    if pad:
-        rows = [
-            Text.assemble(pad, _style_row(line, y, cx, cy, hue))
-            for y, line in enumerate(lines)
-        ]
-    else:
-        rows = [
-            _style_row(line, y, cx, cy, hue)
-            for y, line in enumerate(lines)
-        ]
-
-    if term_height is not None:
-        v_pad = max(0, (term_height - content_height) // 2)
-        if v_pad:
-            v_pad_rows = [Text("") for _ in range(v_pad)]
-            rows = [*v_pad_rows, *rows]
-    return Group(*rows)

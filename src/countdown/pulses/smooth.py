@@ -57,7 +57,9 @@ def pulse_smooth(lines):
     if _START[0] is None:
         _START[0] = time()
     phase = (time() - _START[0]) * 2.5
-    print(FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end="")
+    print(
+        FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end=""
+    )
 
 
 def reset_state():

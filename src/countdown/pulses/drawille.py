@@ -50,8 +50,12 @@ def _render_braille(lines, phase):
     t = phase
 
     for px, py in base_pixels:
-        dx = 0.5 * math.sin(t * 3 + py * 0.4) + 0.5 * math.cos(t * 1.7 + px * 0.2)
-        dy = 0.5 * math.cos(t * 2.5 + px * 0.3) + 0.5 * math.sin(t * 1.3 + py * 0.5)
+        dx = 0.5 * math.sin(t * 3 + py * 0.4) + 0.5 * math.cos(
+            t * 1.7 + px * 0.2
+        )
+        dy = 0.5 * math.cos(t * 2.5 + px * 0.3) + 0.5 * math.sin(
+            t * 1.3 + py * 0.5
+        )
         canvas.set(int(px + dx), int(py + dy))
 
     raw_rows = canvas.frame().splitlines()
@@ -82,7 +86,9 @@ def pulse_drawille(lines):
     if _START[0] is None:
         _START[0] = time()
     phase = time() - _START[0]
-    print(FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end="")
+    print(
+        FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end=""
+    )
 
 
 def reset_state():

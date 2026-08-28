@@ -23,13 +23,20 @@ def ctx():
 )
 def given_countdown_from(seconds):
     show_hours = seconds >= 3600
-    return {"total": seconds, "show_hours": show_hours, "lines": None, "time_str": None}
+    return {
+        "total": seconds,
+        "show_hours": show_hours,
+        "lines": None,
+        "time_str": None,
+    }
 
 
 @when(parsers.parse("the display renders at second {at_second:d}"))
 def when_render_at_second(ctx, at_second):
     show_hours = ctx["show_hours"]
-    lines = timer.get_number_lines(at_second, _TEST_CHARS, show_hours=show_hours)
+    lines = timer.get_number_lines(
+        at_second, _TEST_CHARS, show_hours=show_hours
+    )
     ctx["lines"] = lines
     # Derive the rendered time string from the first line content
     # (we check _format_time_string directly for the canonical form)
@@ -48,7 +55,9 @@ def then_rendered_time_string(ctx, expected):
 @then("the format should be MM:SS")
 def then_format_mmss(ctx):
     assert ":" in ctx["time_str"], "Expected MM:SS format (with colon)"
-    assert ctx["time_str"].count(":") == 1, "Expected exactly one colon for MM:SS"
+    assert ctx["time_str"].count(":") == 1, (
+        "Expected exactly one colon for MM:SS"
+    )
 
 
 @then("the format should be HH:MM:SS")
@@ -62,4 +71,3 @@ def test_raw_seconds_display():
     from countdown.display import _format_time_string
 
     assert _format_time_string(300, raw_seconds=True) == "300"
-

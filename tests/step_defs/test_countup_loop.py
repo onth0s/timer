@@ -21,22 +21,25 @@ scenarios("countup_loop.feature")
 def _run_countup_mocked(clock, keys, monkeypatch):
     displayed: list[int] = []
 
-    monkeypatch.setattr("countdown.__main__.time", clock.time)
-    monkeypatch.setattr("countdown.__main__.sleep", clock.sleep)
+    monkeypatch.setattr("countdown.loop.STDCLOCK", clock)
     monkeypatch.setattr(
-        "countdown.__main__.get_number_lines",
-        lambda s, **kw: [str(int(s))],
+        "countdown.timer.get_number_lines",
+        lambda s, _chars, **kw: [str(int(s))],
     )
     monkeypatch.setattr(
-        "countdown.__main__.print_full_screen",
+        "countdown.loop.get_chars_for_terminal",
+        lambda *a, **kw: {},
+    )
+    monkeypatch.setattr(
+        "countdown.loop.print_full_screen",
         lambda lines, **kw: displayed.append(int(lines[0])),
     )
-    monkeypatch.setattr("countdown.__main__.check_for_keypress", keys.check)
-    monkeypatch.setattr("countdown.__main__.read_key", keys.read)
-    monkeypatch.setattr("countdown.__main__.drain_keypresses", lambda: None)
-    monkeypatch.setattr("countdown.__main__.setup_terminal", lambda: None)
-    monkeypatch.setattr("countdown.__main__.restore_terminal", lambda s: None)
-    monkeypatch.setattr("countdown.__main__.enable_ansi_escape_codes", lambda: None)
+    monkeypatch.setattr("countdown.loop.check_for_keypress", keys.check)
+    monkeypatch.setattr("countdown.loop.read_key", keys.read)
+    monkeypatch.setattr("countdown.loop.drain_keypresses", lambda: None)
+    monkeypatch.setattr("countdown.loop.setup_terminal", lambda: None)
+    monkeypatch.setattr("countdown.loop.restore_terminal", lambda s: None)
+    monkeypatch.setattr("countdown.loop.enable_ansi_escape_codes", lambda: None)
 
     from unittest.mock import patch
 
@@ -125,7 +128,10 @@ def then_final_recorded_time(ctx, ticks):
     assert ctx["displayed"][-1] == ticks
 
 
-@given(parsers.parse("the stopwatch ran for {seconds:d} seconds then quit"), target_fixture="ctx")
+@given(
+    parsers.parse("the stopwatch ran for {seconds:d} seconds then quit"),
+    target_fixture="ctx",
+)
 def given_stopwatch_ran(seconds):
     from countdown import timer
 

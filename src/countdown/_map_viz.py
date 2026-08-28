@@ -101,10 +101,22 @@ def mark_quadrant_corners(grid):
     w = len(grid[0]) if grid else 0
     cx, cy = max(0, (w - 1) // 2), max(0, (h - 1) // 2)
     corners = [
-        (0, 0), (cx, 0), (0, cy), (cx, cy),
-        (cx + 1, 0), (w - 1, 0), (cx + 1, cy), (w - 1, cy),
-        (0, cy + 1), (cx, cy + 1), (0, h - 1), (cx, h - 1),
-        (cx + 1, cy + 1), (w - 1, cy + 1), (cx + 1, h - 1), (w - 1, h - 1),
+        (0, 0),
+        (cx, 0),
+        (0, cy),
+        (cx, cy),
+        (cx + 1, 0),
+        (w - 1, 0),
+        (cx + 1, cy),
+        (w - 1, cy),
+        (0, cy + 1),
+        (cx, cy + 1),
+        (0, h - 1),
+        (cx, h - 1),
+        (cx + 1, cy + 1),
+        (w - 1, cy + 1),
+        (cx + 1, h - 1),
+        (w - 1, h - 1),
     ]
     for x, y in corners:
         if 0 <= y < h and 0 <= x < w:

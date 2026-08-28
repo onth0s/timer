@@ -1,48 +1,23 @@
 """Command-line interface."""
 
-from time import sleep, time
-
 import click
 import rich_click  # noqa: F401 — patches Click for Rich-styled --help
 
 from . import timer
 from .config import Config
-from .display import (
-    DISABLE_ALT_BUFFER,
-    ENABLE_ALT_BUFFER,
-    HIDE_CURSOR,
-    SHOW_CURSOR,
-    enable_ansi_escape_codes,
-    get_chars_for_terminal,
-    print_full_screen,
-)
-from .keys import get_time_adjustment, is_pause_key, is_time_adjust_key
 from .pulses import VALID_ANIM_MODES, get_pulse_fn
-from .schedule import ScheduleStore, format_remaining, wall_clock
-from .terminal import (
-    check_for_keypress,
-    drain_keypresses,
-    read_key,
-    restore_terminal,
-    setup_terminal,
+from .schedule import wall_clock
+from .schedules_cli import (
+    add_schedule,
+    check_schedule,
+    load_store,
+    render_schedule_list,
+    render_schedule_live,
 )
 
 # rich-click configuration
 rich_click.USE_RICH_MARKUP = True
 rich_click.STYLE_HELPTEXT = ""
-
-
-def get_number_lines(
-    seconds, *, show_hours=False, count_up=False, raw_seconds=False
-):
-    """Return list of lines which make large glyphs for the time display."""
-    return timer.get_number_lines(
-        seconds,
-        get_chars_for_terminal(seconds, show_hours=show_hours),
-        show_hours=show_hours,
-        count_up=count_up,
-        raw_seconds=raw_seconds,
-    )
 
 
 def run_countdown(
@@ -57,6 +32,11 @@ def run_countdown(
 ):
     """Run the countdown or count-up timer.
 
+    Thin adapter over :func:`countdown.loop.run_countdown`, which owns the
+    actual loop, timing (:data:`countdown.loop.STDCLOCK`), and pulse
+    orchestration. Kept here as the public entry point so the Click tree and
+    tests keep a stable call surface.
+
     Args:
         total_seconds: Duration in seconds to count down from (or None for count-up)
         pulse_fn: Callable(lines) called after countdown reaches 0
@@ -66,182 +46,17 @@ def run_countdown(
         raw_seconds: If True, display as bare seconds (e.g. 300) without colons.
         dur_str: Explicit formatted duration string for summary display.
     """
-    from rich.console import Console
-    from rich.panel import Panel
+    from .loop import run_countdown as _loop_run_countdown
 
-    from .pulses.ansi import pulse_ansi
-
-    if pulse_fn is None:
-        pulse_fn = pulse_ansi
-
-    console = Console()
-    enable_ansi_escape_codes()
-    old_settings = setup_terminal()
-    print(ENABLE_ALT_BUFFER + HIDE_CURSOR, end="")
-
-    zero_epoch = None
-    exit_delay = None
-    final_seconds = 0
-
-    try:
-        paused = False
-        if count_up:
-            n = 0
-            pause_accum = 0.0
-            pause_start = None
-            while True:
-                lines = get_number_lines(
-                    n, show_hours=show_hours, count_up=True, raw_seconds=raw_seconds
-                )
-                print_full_screen(lines, paused=paused)
-
-                if check_for_keypress():
-                    key = read_key()
-                    if key == "q" or key == "\x1b":  # q or Esc
-                        final_seconds = n
-                        break
-                    elif is_pause_key(key):
-                        if paused:
-                            pause_accum += time() - pause_start
-                            pause_start = None
-                        else:
-                            pause_start = time()
-                        paused = not paused
-                        drain_keypresses()
-
-                if not paused:
-                    sleep(1.0)
-                    n += 1
-                    final_seconds = n
-                else:
-                    sleep(0.05)
-        else:
-            n = total_seconds
-            sleep_until = time() + total_seconds
-            pause_start = None
-            while n >= 0 or paused:
-                lines = get_number_lines(
-                    n, show_hours=show_hours, raw_seconds=raw_seconds
-                )
-                print_full_screen(lines, paused=paused)
-
-                if check_for_keypress():
-                    key = read_key()
-                    if key == "q" or key == "\x1b":  # q or Esc
-                        break
-                    elif is_pause_key(key):
-                        if paused:
-                            sleep_until += time() - pause_start
-                            pause_start = None
-                        else:
-                            pause_start = time()
-                        paused = not paused
-                        drain_keypresses()
-                        lines = get_number_lines(
-                            n, show_hours=show_hours, raw_seconds=raw_seconds
-                        )
-                        print_full_screen(lines, paused=paused)
-                    elif is_time_adjust_key(key):
-                        adjustment = get_time_adjustment(key)
-                        new_n = max(0, n + adjustment)
-                        sleep_until += new_n - n
-                        n = new_n
-                        drain_keypresses()
-                        lines = get_number_lines(
-                            n, show_hours=show_hours, raw_seconds=raw_seconds
-                        )
-                        print_full_screen(lines, paused=paused)
-
-                if not paused:
-                    display_this_second_until = sleep_until - n + 1
-                    remaining = display_this_second_until - time()
-                    if remaining > 0:
-                        sleep(remaining)
-                    n -= 1
-                else:
-                    if not check_for_keypress():
-                        sleep(1.0)
-                    else:
-                        sleep(0.05)
-
-            # Record epoch timestamp when reaching zero
-            zero_epoch = time()
-
-            if getattr(pulse_fn, "__name__", "") == "pulse_asciimatics":
-                print(SHOW_CURSOR + DISABLE_ALT_BUFFER, end="", flush=True)
-                pulse_fn(
-                    get_number_lines(
-                        0, show_hours=show_hours, raw_seconds=raw_seconds
-                    )
-                )
-                exit_delay = time() - zero_epoch
-                return
-
-            pulse_count = 0
-            while (
-                max_pulses is None or pulse_count < max_pulses
-            ) and not check_for_keypress():
-                pulse_fn(
-                    get_number_lines(
-                        0, show_hours=show_hours, raw_seconds=raw_seconds
-                    )
-                )
-                sleep(0.05)
-                pulse_count += 1
-
-            exit_delay = time() - zero_epoch
-
-    except KeyboardInterrupt:
-        if zero_epoch is not None and exit_delay is None:
-            exit_delay = time() - zero_epoch
-    finally:
-        restore_terminal(old_settings)
-        print(SHOW_CURSOR + DISABLE_ALT_BUFFER, end="")
-
-        # Persistent summary log using rich
-        if count_up:
-            final_dur = dur_str or timer.format_duration(
-                timer.compact(timer.duration(f"{final_seconds}s"))
-            )
-            console.print(
-                Panel(
-                    f"[bold green]Timer ran for {final_dur}[/bold green]",
-                    title="[bold cyan]Timer Summary[/bold cyan]",
-                    expand=False,
-                )
-            )
-        else:
-            if dur_str:
-                total_ran = dur_str
-            elif raw_seconds:
-                total_ran = f"{total_seconds}s"
-            else:
-                total_ran = timer.format_duration(
-                    timer.compact(timer.duration(f"{total_seconds}s"))
-                )
-            if exit_delay is not None:
-                if exit_delay < 1:
-                    delay_str = f"{exit_delay:.2f}s"
-                else:
-                    delay_str = timer.format_duration(
-                        timer.compact(timer.duration(f"{int(exit_delay)}s"))
-                    )
-                console.print(
-                    Panel(
-                        f"[bold green]Timer completed ({total_ran})[/bold green]\n"
-                        f"[bold yellow]Time to exit after timeout: {delay_str}[/bold yellow]",
-                        title="[bold cyan]Timer Summary[/bold cyan]",
-                        expand=False,
-                    )
-                )
-            else:
-                console.print(
-                    Panel(
-                        f"[bold yellow]Timer stopped early ({total_ran} configured)[/bold yellow]",
-                        title="[bold cyan]Timer Summary[/bold cyan]",
-                        expand=False,
-                    )
-                )
+    return _loop_run_countdown(
+        total_seconds,
+        pulse_fn=pulse_fn,
+        max_pulses=max_pulses,
+        show_hours=show_hours,
+        count_up=count_up,
+        raw_seconds=raw_seconds,
+        dur_str=dur_str,
+    )
 
 
 # Store original on the function for tests to bypass the default wrapper.
@@ -399,7 +214,9 @@ def countdown(anim, raw, duration):
             raw_seconds = True
             dur_str = old
     else:
-        dur_str = f"{dur.total_seconds}s" if raw else timer_mod.format_duration(dur)
+        dur_str = (
+            f"{dur.total_seconds}s" if raw else timer_mod.format_duration(dur)
+        )
 
     show_hours = dur.total_seconds >= 3600
     run_countdown(
@@ -503,231 +320,6 @@ class ScheduleAtCommand(click.Command):
         """Re-protect dash-prefixed positionals (idempotent)."""
         fixed_args = _fix_dash_args(self, args)
         return super().parse_args(ctx, fixed_args)
-
-
-def load_store() -> ScheduleStore:
-    """Load the schedule store, surfacing file errors as ``UsageError``."""
-    try:
-        return ScheduleStore.load()
-    except ValueError as exc:
-        raise click.UsageError(str(exc)) from exc
-
-
-def _schedule_table(store, now):
-    """Build the FILO schedule stack as a rich table at a given clock time."""
-    from rich.table import Table
-    from rich.text import Text
-
-    table = Table(
-        title=f"Schedules ({len(store)})",
-        border_style="cyan",
-    )
-    table.add_column("#", justify="right", style="bold cyan", no_wrap=True)
-    table.add_column("Remaining", no_wrap=True)
-    table.add_column("Due", style="white", no_wrap=True)
-    table.add_column("Alias", style="bold bright_cyan", no_wrap=True)
-
-    for position, schedule in enumerate(store.ordered(), start=1):
-        remaining = schedule.remaining(now)
-        if remaining > 0:
-            remaining_cell = Text(
-                format_remaining(remaining), style="bold green"
-            )
-            due_cell = Text(wall_clock(schedule.due), style="white")
-        else:
-            remaining_cell = Text("Timeout!", style="bold yellow")
-            due_cell = Text(f"ended {wall_clock(schedule.due)}", style="dim")
-        if schedule.alias:
-            alias_cell = Text(schedule.alias, style="bold bright_cyan")
-        else:
-            alias_cell = Text("null", style="dim italic")
-        table.add_row(str(position), remaining_cell, due_cell, alias_cell)
-    return table
-
-
-def render_schedule_list(store):
-    """Render the FILO schedule stack as a static rich table."""
-    from rich.console import Console
-    from rich.panel import Panel
-
-    console = Console()
-    if len(store) == 0:
-        console.print(
-            Panel(
-                "No schedules yet - add one with e.g. [bold]timer schedule 1h[/bold] "
-                "or [bold]timer schedule -23:45[/bold].",
-                title="[bold cyan]Schedules[/bold cyan]",
-                border_style="cyan",
-                expand=False,
-            )
-        )
-        return
-    console.print(_schedule_table(store, time()))
-
-
-def render_schedule_live(store):
-    """Render the schedule stack as a live table that ticks down in place.
-
-    Remaining times refresh every second and rows flip to ``Timeout!`` as their
-    deadlines pass. Press any key (or Ctrl+C) to exit; a summary line is always
-    printed so the view never ends silently.
-    """
-    from rich.console import Console
-    from rich.live import Live
-    from rich.text import Text
-
-    console = Console()
-    if len(store) == 0:
-        render_schedule_list(store)
-        return
-
-    started = time()
-    try:
-        with Live(
-            _schedule_table(store, started),
-            console=console,
-            screen=False,
-            auto_refresh=False,
-        ) as live:
-            while True:
-                live.update(_schedule_table(store, time()))
-                live.refresh()
-                if check_for_keypress():
-                    break
-                sleep(1.0)
-    except KeyboardInterrupt:
-        pass
-    finished = time()
-    timed_out = sum(
-        1 for s in store.ordered() if s.remaining(finished) <= 0
-    )
-    console.print(
-        Text.assemble(
-            ("Stopped schedule live view ", "bold green"),
-            (f"(watched {format_remaining(int(finished - started))}, ", ""),
-            (f"{timed_out} timed out).", ""),
-        )
-    )
-
-
-def add_schedule(store, spec, alias):
-    """Parse ``spec``, append a new schedule, persist, and report clearly."""
-    try:
-        dur = timer.duration(spec)
-    except ValueError as exc:
-        raise click.UsageError(str(exc)) from exc
-
-    now = time()
-    try:
-        schedule = store.add(
-            due=now + dur.total_seconds, created=now, spec=spec, alias=alias
-        )
-    except ValueError as exc:
-        raise click.UsageError(str(exc)) from exc
-    store.save()
-
-    from rich.console import Console
-    from rich.text import Text
-
-    message = Text.assemble(
-        ("Scheduled ", "bold green"),
-        (schedule.alias or schedule.spec, "bold white"),
-        (" :: due ", ""),
-        (wall_clock(schedule.due), "bold cyan"),
-        (" :: stack #1", ""),
-        (f" :: saved to {store.resolve_path()}", "dim"),
-    )
-    Console().print(message)
-    return schedule
-
-
-def check_schedule(schedule, *, now_flag, position=None):
-    """Check in on a schedule: big-timer countdown, or a one-shot ``--now``.
-
-    Expired schedules still launch the big timer (00:00 + pulse) unless
-    ``--now`` was passed; no code path is ever silent.
-    """
-    from rich.console import Console
-    from rich.panel import Panel
-    from rich.text import Text
-
-    now = time()
-    remaining = schedule.remaining(now)
-    label = schedule.alias or schedule.spec
-    tag = f"#{position} " if position else ""
-    console = Console()
-
-    config = Config.load()
-    try:
-        mode = config.get("anim") or "rich"
-        pulse_fn = get_pulse_fn(mode)
-    except ValueError as exc:
-        raise click.UsageError(str(exc)) from exc
-
-    if remaining <= 0:
-        if now_flag:
-            body = Text.assemble(
-                ("Timeout! ", "bold yellow"),
-                (f"{tag}{label} ended {wall_clock(schedule.due)} ", ""),
-                (f"({format_remaining(remaining).lstrip('-')} ago).", "dim"),
-            )
-            console.print(
-                Panel(
-                    body,
-                    title="[bold cyan]Schedule[/bold cyan]",
-                    border_style="yellow",
-                    expand=False,
-                )
-            )
-            return
-        console.print(
-            Text.assemble(
-                ("Timed out ", "bold yellow"),
-                (f"{tag}{label} ", "bold white"),
-                (f"({format_remaining(remaining).lstrip('-')} ago) ", "dim"),
-                ("- running 00:00, press q to exit.", ""),
-            )
-        )
-        run_countdown(
-            0,
-            pulse_fn=pulse_fn,
-            show_hours=False,
-            dur_str="0s",
-        )
-        return
-
-    if now_flag:
-        body = Text.assemble(
-            (f"{tag}", "bold cyan"),
-            (f"{label} - ", "bold green"),
-            (f"{format_remaining(remaining)} remaining", "bold white"),
-            (f"\ndue {wall_clock(schedule.due)}", "dim"),
-        )
-        console.print(
-            Panel(
-                body,
-                title="[bold cyan]Schedule[/bold cyan]",
-                border_style="cyan",
-                expand=False,
-            )
-        )
-        return
-
-    console.print(
-        Text.assemble(
-            ("Checking in on ", ""),
-            (f"{tag}", "bold cyan"),
-            (f"{label} ", "bold white"),
-            (f"- {format_remaining(remaining)} left, ", ""),
-            (f"due {wall_clock(schedule.due)}", "dim"),
-        )
-    )
-    run_countdown(
-        int(remaining),
-        pulse_fn=pulse_fn,
-        show_hours=remaining >= 3600,
-        dur_str=format_remaining(remaining),
-    )
 
 
 @main.group(cls=ScheduleGroup, invoke_without_command=True)
@@ -886,7 +478,9 @@ def schedule_at(now, expand, args):
         return
 
     if len(args) > 2:
-        raise click.UsageError("Expected DURATION [ALIAS] - too many arguments.")
+        raise click.UsageError(
+            "Expected DURATION [ALIAS] - too many arguments."
+        )
     add_schedule(store, args[0], args[1])
     if expand:
         check_schedule(store.ordered()[0], now_flag=False, position=1)
@@ -934,8 +528,10 @@ def showcase(time_per_mode, shuffle, once, duration):
       timer showcase --random  # shuffle the order each cycle
       timer showcase --once    # cycle once then exit
     """
-    interval = time_per_mode if time_per_mode is not None else (
-        duration if duration is not None else 3.0
+    interval = (
+        time_per_mode
+        if time_per_mode is not None
+        else (duration if duration is not None else 3.0)
     )
     from .showcase import run_showcase
 

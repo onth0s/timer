@@ -4,16 +4,7 @@ from pathlib import Path
 
 import yaml
 
-from .pulses import VALID_ANIM_MODES
-
-
-def validate_anim_mode(name: str) -> None:
-    """Raise ``ValueError`` if ``name`` is not a valid animation mode."""
-    if name not in VALID_ANIM_MODES:
-        valid = ", ".join(VALID_ANIM_MODES)
-        raise ValueError(
-            f"Invalid anim mode: {name!r}. Valid modes: {valid}"
-        )
+from .pulses import validate_anim_mode
 
 
 class Config:
@@ -64,4 +55,4 @@ class Config:
         return dict(self._data)
 
 
-__all__ = ["Config", "validate_anim_mode"]
+__all__ = ["Config", "validate_anim_mode"]  # re-export from .pulses

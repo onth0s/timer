@@ -32,7 +32,11 @@ def style_lines(lines, phase, glitch_rate=0.08):
                 continue
             distance = math.sqrt((x - cx) ** 2 + (y - cy) ** 2)
             wave = math.sin(phase * 4 - distance * 0.6)
-            display_ch = random.choice(_GLITCH_CHARS) if random.random() < glitch_rate else ch
+            display_ch = (
+                random.choice(_GLITCH_CHARS)
+                if random.random() < glitch_rate
+                else ch
+            )
             if wave > 0.3:
                 styled.append(f"\x1b[1m\x1b[95m{display_ch}\x1b[0m")
             elif wave > -0.3:
@@ -61,7 +65,9 @@ def pulse_ghostprint(lines):
     if _START[0] is None:
         _START[0] = time()
     phase = time() - _START[0]
-    print(FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end="")
+    print(
+        FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end=""
+    )
 
 
 def reset_state():

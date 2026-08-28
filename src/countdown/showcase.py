@@ -81,10 +81,10 @@ def run_showcase(interval: float, shuffle: bool, once: bool):
     print(ENABLE_ALT_BUFFER + HIDE_CURSOR, end="")
 
     try:
-        # Lazy import to avoid circular dependency at module load
-        from .__main__ import get_number_lines
+        from . import timer as timer_mod
+        from .display import get_chars_for_terminal
 
-        zero_lines = get_number_lines(0)
+        zero_lines = timer_mod.get_number_lines(0, get_chars_for_terminal(0))
         iteration = 0
         while True:
             order = list(SHOWCASE_MODES)
