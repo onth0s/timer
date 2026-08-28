@@ -119,26 +119,20 @@ def _command_suggestions(token: str, commands: dict) -> list[str]:
     return difflib.get_close_matches(token, commands, n=3, cutoff=0.5)
 
 
-def _raise_if_command_typo(token: str, commands: dict) -> None:
-    """Raise a "Did you mean ...?" UsageError when ``token`` looks like a typo.
+def _resolve_typo_command(token: str, commands: dict) -> str | None:
+    """Return the command ``token`` most likely means, or None.
 
-    Only fires for tokens that aren't valid durations and fuzzy-match a known
-    command name, so `timer 5` / `timer -4:40PM` still route to ``run`` while
-    `timer sch` gets pointed at ``schedule``.
+    Only non-duration tokens that fuzzy-match a command name are resolved, so
+    `timer 5` / `timer -4:40PM` still count as durations (routed to ``run``)
+    while `timer sch` -- which is *not* a duration -- dispatches to
+    ``schedule``.
     """
     if _is_duration_token(token):
-        return
+        return None
     suggestions = _command_suggestions(token, commands)
     if not suggestions:
-        return
-    if len(suggestions) == 1:
-        raise click.UsageError(
-            f"No such command {token!r}. Did you mean '{suggestions[0]}'?"
-        )
-    extra = "\n".join(f"  {c}" for c in suggestions)
-    raise click.UsageError(
-        f"No such command {token!r}. Did you mean one of these?\n{extra}"
-    )
+        return None
+    return suggestions[0]
 
 
 class RunCommand(click.Command):
@@ -151,35 +145,40 @@ class RunCommand(click.Command):
 
 
 class SmartGroup(click.Group):
-    """Group that forwards unmatched positional args to the ``run`` subcommand.
+    """Group that forwards unmatched positional args to a matching subcommand.
 
-    Lets ``timer 5`` or ``timer -4:40PM`` work as an alias for ``timer run ...``.
+    Lets ``timer 5`` / ``timer -4:40PM`` work as aliases for ``timer run ...``,
+    and routes ambiguous spellings like ``timer sch`` straight to ``schedule``.
     """
 
+    def _route(self, args):
+        """Return subcommand-prefixed args for an unknown leading token, or None."""
+        first = args[0]
+        target = _resolve_typo_command(first, self.commands)
+        if target:
+            return [target] + list(args[1:])
+        if "run" in self.commands:
+            fixed_args = _fix_dash_args(self.commands["run"], args)
+            return ["run"] + fixed_args
+        return None
+
     def parse_args(self, ctx, args):
-        """Forward non-subcommand arguments to `run` subcommand with dash fix applied."""
+        """Forward non-subcommand arguments to a matching subcommand."""
         if args:
             first = args[0]
             group_opts = {"-h", "--help", "--version"}
             if first not in self.commands and first not in group_opts:
-                _raise_if_command_typo(first, self.commands)
-                run_cmd = self.commands.get("run")
-                if run_cmd:
-                    fixed_args = _fix_dash_args(run_cmd, args)
-                    return super().parse_args(ctx, ["run"] + fixed_args)
+                routed = self._route(args)
+                if routed is not None:
+                    return super().parse_args(ctx, routed)
         return super().parse_args(ctx, args)
 
     def resolve_command(self, ctx, args):
-        """Route non-subcommand positional args to the run subcommand.
-
-        Unknown tokens are forwarded to ``run`` as a duration so ``timer 5`` /
-        ``timer -4:40PM`` work as convenience aliases. If the token is *not* a
-        valid duration but looks like a mistyped command name, surface a
-        "Did you mean ...?" suggestion instead of a cryptic duration error.
-        """
+        """Route non-subcommand positional args to a matching subcommand."""
         if args and args[0] not in self.commands:
-            _raise_if_command_typo(args[0], self.commands)
-            return "run", self.commands["run"], args
+            routed = self._route(args)
+            if routed is not None:
+                return routed[0], self.commands[routed[0]], routed[1:]
         return super().resolve_command(ctx, args)
 
 

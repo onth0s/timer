@@ -215,20 +215,34 @@ def test_raw_flag_option(runner, tmp_path, monkeypatch):
     assert captured_kwargs[-1]["dur_str"] == "300s"
 
 
-def test_unknown_command_suggests_close_match(runner, tmp_path, monkeypatch):
+def test_unknown_token_dispatches_to_suggested_command(
+    runner, tmp_path, monkeypatch
+):
     p = tmp_path / "config.yaml"
     monkeypatch.setattr(Config, "path", p)
 
-    res1 = runner.invoke(main, ["sch"])
-    assert res1.exit_code != 0
-    assert "No such command 'sch'" in res1.output
-    assert "schedule" in res1.output
-    assert "Did you mean" in res1.output
+    from countdown import __main__ as main_mod
+    from countdown import showcase as showcase_mod
 
+    calls = []
+
+    def fake_live(store):
+        calls.append(("schedule", store))
+
+    def fake_showcase(interval, shuffle, once):
+        calls.append(("showcase", interval, shuffle, once))
+
+    monkeypatch.setattr(main_mod, "render_schedule_live", fake_live)
+    monkeypatch.setattr(main_mod, "load_store", lambda: "STORE")
+
+    res = runner.invoke(main, ["sch"])
+    assert res.exit_code == 0, res.output
+    assert calls == [("schedule", "STORE")]
+
+    monkeypatch.setattr(showcase_mod, "run_showcase", fake_showcase)
     res2 = runner.invoke(main, ["show"])
-    assert res2.exit_code != 0
-    assert "No such command 'show'" in res2.output
-    assert "showcase" in res2.output
+    assert res2.exit_code == 0, res2.output
+    assert calls[-1][0] == "showcase"
 
 
 def test_non_duration_unknown_keeps_invalid_duration_error(
