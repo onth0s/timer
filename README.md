@@ -18,6 +18,8 @@ timer 90            # 90 seconds
 timer 5m            # 5 minutes
 timer 1m30s         # 1 minute 30 seconds
 timer 1h            # 1 hour
+timer 2d            # 2 days
+timer 2d1h30m       # 2 days 1 hour 30 minutes
 timer 1h30          # 1 hour 30 minutes (short form)
 timer 2m45          # 2 minutes 45 seconds (short form)
 timer 4:40          # 4 hours 40 minutes (HH:MM colon format)
@@ -26,6 +28,9 @@ timer :01:20        # 1 minute 20 seconds (:MM:SS format)
 timer -4:40PM       # Target time: count down until 4:40 PM
 timer -16:40        # Target time: count down until 16:40 (24h clock)
 ```
+
+A `d` suffix marks days; durations over 24h compact to daytime notation
+everywhere (e.g. `timer 26h` summarizes as `1d2h`).
 
 ### Target Times (`-` prefix)
 
@@ -138,7 +143,8 @@ Error: Invalid anim mode: 'neon-rave'. Valid modes: ansi, rich, drawille, smooth
 | `timer config init`           | Create default `config.yaml`                     |
 | `timer config show`           | Show resolved config                             |
 | `timer config path`           | Print path to `config.yaml`                      |
-| `timer config anim [MODE]`    | Show or set animation mode                       |
+| `timer config anim [MODE]`  | Show or set animation mode              |
+| `timer schedule ...`        | Lightweight deadlines (never run in the background) |
 
 ### `timer showcase`
 
@@ -153,6 +159,68 @@ timer showcase --once       # cycle through once then exit
 ```
 
 Exit any time with `q` or `Ctrl+C`.
+
+## Schedules
+
+Schedules are deadlines that **never run in the background**. Adding one just
+stores an epoch in `timer.yaml`; you check in on it whenever you like and the
+remaining time is pure arithmetic. Nothing ticks between check-ins.
+
+```bash
+timer schedule 1h pomodoro   # deadline 1 hour from now, alias "pomodoro"
+timer schedule 25m           # unnamed (pick it by list number)
+timer schedule 2d1h30m bake  # day notation works too
+timer schedule -23:45 dinner # clock time today (tomorrow if it has passed)
+timer schedule -4:40PM standup
+```
+
+Relative durations (`25m`, `2d1h30m`) and dash-prefixed clock times
+(`-23:45`, `-4:40PM`) both work; the dash is only for target clock times.
+
+### Checking in
+
+```bash
+timer schedule               # same as `timer schedule list`
+timer schedule list          # FILO stack: newest first, # column selects it
+timer schedule list --now    # accepted; lists are already a static snapshot
+timer schedule 1             # full-screen big timer for that row
+timer schedule pomodoro      # by alias
+timer schedule 1 --now       # one-shot status panel instead of the big timer
+timer schedule 1 --expand    # explicit: run the big timer (default for check-in)
+timer schedule 1h x -e       # add "x", then immediately launch its big timer
+```
+
+Check-in always runs the full-screen animated countdown (config `anim` mode
+applies). `--now` prints a static summary instead — it's the only static path.
+When the deadline has passed, the row is marked `Timeout!` in the list; a
+check-in still runs the big timer at `00:00` with the pulse (static notice
+only under `--now`).
+
+Unnamed schedules leave the Alias column blank — pick them by their `#`.
+Every operation prints a clear message naming what happened, the position,
+and which `timer.yaml` was touched — nothing happens silently.
+
+### Removing
+
+```bash
+timer schedule rm pomodoro   # remove one schedule by alias
+timer schedule rm 1          # ...or by list number
+timer schedule nuke          # removes everything after a y/N confirmation
+```
+
+Aliases must not look like numbers, durations, or the reserved words
+`list`/`nuke`/`rm`. Duplicate aliases are rejected when added and when the
+file is loaded (hand-edited `timer.yaml` cannot smuggle collisions).
+
+### Storage
+
+Schedules live in `timer.yaml`. A `timer.yaml` in the current directory takes
+precedence; otherwise the store falls back to `~/.config/timer.yaml`:
+
+```
+$HOME/dev/project/timer.yaml   # CWD wins when present
+~/.config/timer.yaml           # otherwise
+```
 
 ## Installation
 

@@ -18,6 +18,7 @@ from .display import (
 )
 from .keys import get_time_adjustment, is_pause_key, is_time_adjust_key
 from .pulses import VALID_ANIM_MODES, get_pulse_fn
+from .schedule import ScheduleStore, format_remaining, wall_clock
 from .terminal import (
     check_for_keypress,
     drain_keypresses,
@@ -400,7 +401,7 @@ def countdown(anim, raw, duration):
     else:
         dur_str = f"{dur.total_seconds}s" if raw else timer_mod.format_duration(dur)
 
-    show_hours = "h" in dur.components
+    show_hours = dur.total_seconds >= 3600
     run_countdown(
         dur.total_seconds,
         pulse_fn=pulse_fn,
@@ -462,6 +463,374 @@ def anim(mode):
         raise click.UsageError(str(exc)) from exc
     cfg.save()
     click.echo(f"\u2713 anim set to {mode}", color=True)
+
+
+# ====================================================================
+# Schedule subcommands
+# ====================================================================
+
+
+class ScheduleGroup(click.Group):
+    """Group that routes non-subcommand tokens to the catch-all ``at`` command.
+
+    Protects dash-prefixed target times (e.g. ``-23:45``) from Click's option
+    parser, mirroring how ``SmartGroup`` forwards to ``run``.
+    """
+
+    def parse_args(self, ctx, args):
+        """Rewrite unrecognized first tokens into the catch-all command."""
+        if args:
+            first = args[0]
+            group_opts = {"-h", "--help"}
+            if first not in self.commands and first not in group_opts:
+                at_cmd = self.commands.get("at")
+                if at_cmd:
+                    fixed_args = _fix_dash_args(at_cmd, args)
+                    return super().parse_args(ctx, ["at"] + fixed_args)
+        return super().parse_args(ctx, args)
+
+    def resolve_command(self, ctx, args):
+        """Route non-subcommand tokens to the catch-all command."""
+        if args and args[0] not in self.commands:
+            return "at", self.commands["at"], args
+        return super().resolve_command(ctx, args)
+
+
+class ScheduleAtCommand(click.Command):
+    """Catch-all command whose dash-prefixed positionals survive Click."""
+
+    def parse_args(self, ctx, args):
+        """Re-protect dash-prefixed positionals (idempotent)."""
+        fixed_args = _fix_dash_args(self, args)
+        return super().parse_args(ctx, fixed_args)
+
+
+def load_store() -> ScheduleStore:
+    """Load the schedule store, surfacing file errors as ``UsageError``."""
+    try:
+        return ScheduleStore.load()
+    except ValueError as exc:
+        raise click.UsageError(str(exc)) from exc
+
+
+def render_schedule_list(store):
+    """Render the FILO schedule stack as a rich table."""
+    from rich.console import Console
+    from rich.table import Table
+    from rich.text import Text
+
+    now = time()
+    table = Table(
+        title=f"Schedules ({len(store)})",
+        border_style="cyan",
+    )
+    table.add_column("#", justify="right", style="bold cyan", no_wrap=True)
+    table.add_column("Remaining", no_wrap=True)
+    table.add_column("Due", style="white", no_wrap=True)
+    table.add_column("Alias", style="bold bright_cyan", no_wrap=True)
+
+    for position, schedule in enumerate(store.ordered(), start=1):
+        remaining = schedule.remaining(now)
+        if remaining > 0:
+            remaining_cell = Text(
+                format_remaining(remaining), style="bold green"
+            )
+            due_cell = Text(wall_clock(schedule.due), style="white")
+        else:
+            remaining_cell = Text("Timeout!", style="bold yellow")
+            due_cell = Text(f"ended {wall_clock(schedule.due)}", style="dim")
+        if schedule.alias:
+            alias_cell = Text(schedule.alias, style="bold bright_cyan")
+        else:
+            alias_cell = Text("", style="dim")
+        table.add_row(str(position), remaining_cell, due_cell, alias_cell)
+
+    console = Console()
+    if len(store) == 0:
+        from rich.panel import Panel
+
+        console.print(
+            Panel(
+                "No schedules yet - add one with e.g. [bold]timer schedule 1h[/bold] "
+                "or [bold]timer schedule -23:45[/bold].",
+                title="[bold cyan]Schedules[/bold cyan]",
+                border_style="cyan",
+                expand=False,
+            )
+        )
+        return
+    console.print(table)
+
+
+def add_schedule(store, spec, alias):
+    """Parse ``spec``, append a new schedule, persist, and report clearly."""
+    try:
+        dur = timer.duration(spec)
+    except ValueError as exc:
+        raise click.UsageError(str(exc)) from exc
+
+    now = time()
+    try:
+        schedule = store.add(
+            due=now + dur.total_seconds, created=now, spec=spec, alias=alias
+        )
+    except ValueError as exc:
+        raise click.UsageError(str(exc)) from exc
+    store.save()
+
+    from rich.console import Console
+    from rich.text import Text
+
+    message = Text.assemble(
+        ("Scheduled ", "bold green"),
+        (schedule.alias or schedule.spec, "bold white"),
+        (" :: due ", ""),
+        (wall_clock(schedule.due), "bold cyan"),
+        (" :: stack #1", ""),
+        (f" :: saved to {store.resolve_path()}", "dim"),
+    )
+    Console().print(message)
+    return schedule
+
+
+def check_schedule(schedule, *, now_flag, position=None):
+    """Check in on a schedule: big-timer countdown, or a one-shot ``--now``.
+
+    Expired schedules still launch the big timer (00:00 + pulse) unless
+    ``--now`` was passed; no code path is ever silent.
+    """
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.text import Text
+
+    now = time()
+    remaining = schedule.remaining(now)
+    label = schedule.alias or schedule.spec
+    tag = f"#{position} " if position else ""
+    console = Console()
+
+    config = Config.load()
+    try:
+        mode = config.get("anim") or "rich"
+        pulse_fn = get_pulse_fn(mode)
+    except ValueError as exc:
+        raise click.UsageError(str(exc)) from exc
+
+    if remaining <= 0:
+        if now_flag:
+            body = Text.assemble(
+                ("Timeout! ", "bold yellow"),
+                (f"{tag}{label} ended {wall_clock(schedule.due)} ", ""),
+                (f"({format_remaining(remaining).lstrip('-')} ago).", "dim"),
+            )
+            console.print(
+                Panel(
+                    body,
+                    title="[bold cyan]Schedule[/bold cyan]",
+                    border_style="yellow",
+                    expand=False,
+                )
+            )
+            return
+        console.print(
+            Text.assemble(
+                ("Timed out ", "bold yellow"),
+                (f"{tag}{label} ", "bold white"),
+                (f"({format_remaining(remaining).lstrip('-')} ago) ", "dim"),
+                ("- running 00:00, press q to exit.", ""),
+            )
+        )
+        run_countdown(
+            0,
+            pulse_fn=pulse_fn,
+            show_hours=False,
+            dur_str="0s",
+        )
+        return
+
+    if now_flag:
+        body = Text.assemble(
+            (f"{tag}", "bold cyan"),
+            (f"{label} - ", "bold green"),
+            (f"{format_remaining(remaining)} remaining", "bold white"),
+            (f"\ndue {wall_clock(schedule.due)}", "dim"),
+        )
+        console.print(
+            Panel(
+                body,
+                title="[bold cyan]Schedule[/bold cyan]",
+                border_style="cyan",
+                expand=False,
+            )
+        )
+        return
+
+    console.print(
+        Text.assemble(
+            ("Checking in on ", ""),
+            (f"{tag}", "bold cyan"),
+            (f"{label} ", "bold white"),
+            (f"- {format_remaining(remaining)} left, ", ""),
+            (f"due {wall_clock(schedule.due)}", "dim"),
+        )
+    )
+    run_countdown(
+        int(remaining),
+        pulse_fn=pulse_fn,
+        show_hours=remaining >= 3600,
+        dur_str=format_remaining(remaining),
+    )
+
+
+@main.group(cls=ScheduleGroup, invoke_without_command=True)
+@click.pass_context
+def schedule(ctx):
+    """Schedule deadlines that never run in the background. Check in anytime.
+
+    A schedule stores only an epoch; nothing ticks between check-ins. Use
+    `timer schedule list` to see the stack, or check in on one by its list
+    number or alias for the full-screen countdown to the deadline.
+    """
+    if ctx.invoked_subcommand is None:
+        render_schedule_list(load_store())
+
+
+@schedule.command(name="list")
+@click.option(
+    "--now",
+    is_flag=True,
+    help="Print the listing once. Lists are already a static snapshot; "
+    "accepted for symmetry with check-in --now.",
+)
+def schedule_list(now):
+    """List all schedules, newest first, with selection numbers."""
+    render_schedule_list(load_store())
+
+
+@schedule.command()
+def nuke():
+    """Remove all schedules after a yes/no confirmation."""
+    store = load_store()
+    count = len(store)
+    if count == 0:
+        from rich.console import Console
+
+        Console().print("[bold yellow]No schedules to remove.[/bold yellow]")
+        return
+    if click.confirm(f"Remove all {count} schedules?", abort=True):
+        store.clear()
+        store.save()
+        from rich.console import Console
+
+        Console().print(
+            f"[bold green]Removed all {count} schedules[/bold green] "
+            f"[dim]from {store.resolve_path()}[/dim]"
+        )
+
+
+@schedule.command()
+@click.argument("target", metavar="ALIAS|NUMBER")
+def rm(target):
+    """Remove one schedule by its list NUMBER or ALIAS."""
+    store = load_store()
+    if len(store) == 0:
+        raise click.UsageError("No schedules to remove.")
+    if target.isdigit():
+        position = int(target)
+        schedule = store.by_number(position)
+        if schedule is None:
+            raise click.UsageError(
+                f"No schedule #{target} - valid range is 1..{len(store)}."
+            )
+    else:
+        schedule = store.by_alias(target)
+        if schedule is None:
+            raise click.UsageError(f"No schedule named {target!r}.")
+        position = store.ordered().index(schedule) + 1
+    label = schedule.alias or schedule.spec
+    store.remove(schedule)
+    store.save()
+    from rich.console import Console
+    from rich.text import Text
+
+    Console().print(
+        Text.assemble(
+            ("Removed ", "bold green"),
+            (f"#{position} ", "bold cyan"),
+            (f"{label} ", "bold white"),
+            (f"- due {wall_clock(schedule.due)} ", ""),
+            (f"from {store.resolve_path()}", "dim"),
+        )
+    )
+
+
+@schedule.command(name="at", cls=ScheduleAtCommand, hidden=True)
+@click.option(
+    "--now",
+    is_flag=True,
+    help="Print the current status once instead of an animated countdown.",
+)
+@click.option(
+    "--expand",
+    "-e",
+    "expand",
+    is_flag=True,
+    help="Run the full-screen big timer (normally the default for check-in; "
+    "with a DURATION it adds first, then immediately launches).",
+)
+@click.argument("args", nargs=-1, required=False)
+def schedule_at(now, expand, args):
+    r"""Add, list, or check in on a schedule.
+
+    \b
+    - `timer schedule 1h [alias]`            add a relative deadline
+    - `timer schedule -23:45 [alias]`        add a clock-time deadline
+    - `timer schedule 1h x --expand, -e`     add, then launch the big timer
+    - `timer schedule <NUMBER|ALIAS>`        check in (big timer; --now static)
+    - `timer schedule`                       same as `timer schedule list`
+    """
+    if now and expand:
+        raise click.UsageError("--now and --expand are mutually exclusive.")
+    store = load_store()
+    args = list(args)
+
+    if not args:
+        render_schedule_list(store)
+        return
+
+    if len(args) == 1:
+        token = args[0]
+        if token.isdigit():
+            position = int(token)
+            schedule = store.by_number(position)
+            if schedule is None:
+                raise click.UsageError(
+                    f"No schedule #{token} - valid range is 1..{len(store)}."
+                )
+            check_schedule(schedule, now_flag=now, position=position)
+            return
+        schedule = store.by_alias(token)
+        if schedule is not None:
+            position = store.ordered().index(schedule) + 1
+            check_schedule(schedule, now_flag=now, position=position)
+            return
+        try:
+            timer.duration(token)
+        except ValueError:
+            raise click.UsageError(
+                f"Unknown schedule or duration: {token!r}. Use a stack "
+                "NUMBER, an ALIAS, a DURATION (e.g. 25m, 2h), or -HH:MM."
+            ) from None
+        add_schedule(store, token, None)
+        if expand:
+            check_schedule(store.ordered()[0], now_flag=False, position=1)
+        return
+
+    if len(args) > 2:
+        raise click.UsageError("Expected DURATION [ALIAS] - too many arguments.")
+    add_schedule(store, args[0], args[1])
+    if expand:
+        check_schedule(store.ordered()[0], now_flag=False, position=1)
 
 
 @main.command()

@@ -21,31 +21,38 @@ class Duration:
         return NotImplemented
 
 
-_UNITS = ["h", "m", "s"]
-_SECONDS_PER = {"h": 3600, "m": 60, "s": 1}
+_UNITS = ["d", "h", "m", "s"]
+_SECONDS_PER = {"d": 86400, "h": 3600, "m": 60, "s": 1}
 
 
 # Regex alternatives in priority order:
-#   1.  Xh Ym Zs   — all explicit units (h→m→s, each optional)
-#   2.  XhY        — X hours, Y minutes (bare after h)
-#   3.  XmY        — X minutes, Y seconds (bare after m)
-#   4.  XhYmZ      — X hours, Y minutes, Z seconds  (bare after m)
-#   5.  X          — bare number → seconds
+#   1.  Xd Yh Zm Ws   — all explicit units (d→h→m→s, each optional)
+#   2.  XdY           — X days, Y hours (bare after d)
+#   3.  XdYhZ         — X days, Y hours, Z minutes (bare after h)
+#   4.  XhY           — X hours, Y minutes (bare after h)
+#   5.  XmY           — X minutes, Y seconds (bare after m)
+#   6.  XhYmZ         — X hours, Y minutes, Z seconds (bare after m)
+#   7.  X             — bare number → seconds
 DURATION_RE = re.compile(
     r"""
     ^
-    (?: (\d+) h )?      # 1. hours (explicit)
-    (?: (\d+) m )?      # 2. minutes (explicit)
-    (?: (\d+) s )?      # 3. seconds (explicit)
+    (?: (\d+) d )?      # 1. days (explicit)
+    (?: (\d+) h )?      # 2. hours (explicit)
+    (?: (\d+) m )?      # 3. minutes (explicit)
+    (?: (\d+) s )?      # 4. seconds (explicit)
     $
     |
-    ^ (\d+) h (\d+) $   # 4,5. XhY → Xh Ym
+    ^ (\d+) d (\d+) $   # 5,6. XdY → Xd Yh
     |
-    ^ (\d+) m (\d+) $   # 6,7. XmY → Xm Ys
+    ^ (\d+) d (\d+) h (\d+) $   # 7,8,9. XdYhZ → Xd Yh Zm
     |
-    ^ (\d+) h (\d+) m (\d+) $  # 8,9,10. XhYmZ → Xh Ym Zs
+    ^ (\d+) h (\d+) $   # 10,11. XhY → Xh Ym
     |
-    ^ (\d+) $           # 11. bare number → seconds
+    ^ (\d+) m (\d+) $   # 12,13. XmY → Xm Ys
+    |
+    ^ (\d+) h (\d+) m (\d+) $  # 14,15,16. XhYmZ → Xh Ym Zs
+    |
+    ^ (\d+) $           # 17. bare number → seconds
     """,
     re.VERBOSE,
 )
@@ -78,6 +85,7 @@ def duration(string, now=None):
           * -4:40 (04:40 clock time)
           * Also strips '-' for standard duration strings (e.g. -5m -> 5m)
       - Non '-' prefix: Amount of time:
+          * XdYhZmWs (days, hours, minutes, seconds; e.g. 2d1h30m)
           * HH:MM (e.g. 4:40 -> 4h40m, 16:40 -> 16h40m)
           * HH:MM:SS (e.g. 1:02:03 -> 1h2m3s)
           * :MM:SS or :SS (e.g. :01:20 -> 1m20s, :45 -> 45s)
@@ -182,17 +190,42 @@ def duration(string, now=None):
     if not match:
         raise ValueError(f"Invalid duration: {string}")
 
-    h, m, s, h_y, my, m_y, sy, h2, m2, s2, bare = match.groups()
+    (
+        day,
+        hour,
+        minute,
+        second,
+        d_y,
+        hy,
+        dd,
+        dhh,
+        dmm,
+        h_y,
+        my,
+        m_y,
+        sy,
+        hx,
+        mx,
+        sx,
+        bare,
+    ) = match.groups()
 
     if bare is not None:
         total = int(bare)
         return Duration(total_seconds=total, components={"s": total})
 
-    if h2 is not None:
-        total = int(h2) * 3600 + int(m2) * 60 + int(s2)
+    if dd is not None:
+        total = int(dd) * 86400 + int(dhh) * 3600 + int(dmm) * 60
         return Duration(
             total_seconds=total,
-            components=_build_components((h2, "h"), (m2, "m"), (s2, "s")),
+            components=_build_components((dd, "d"), (dhh, "h"), (dmm, "m")),
+        )
+
+    if d_y is not None:
+        total = int(d_y) * 86400 + int(hy) * 3600
+        return Duration(
+            total_seconds=total,
+            components=_build_components((d_y, "d"), (hy, "h")),
         )
 
     if h_y is not None:
@@ -209,10 +242,17 @@ def duration(string, now=None):
             components=_build_components((m_y, "m"), (sy, "s")),
         )
 
-    total = int(h or 0) * 3600 + int(m or 0) * 60 + int(s or 0)
+    total = (
+        int(day or 0) * 86400
+        + int(hour or 0) * 3600
+        + int(minute or 0) * 60
+        + int(second or 0)
+    )
     return Duration(
         total_seconds=total,
-        components=_build_components((h, "h"), (m, "m"), (s, "s")),
+        components=_build_components(
+            (day, "d"), (hour, "h"), (minute, "m"), (second, "s")
+        ),
     )
 
 
