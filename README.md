@@ -246,5 +246,6 @@ uv run timer 5
 Run the test suite:
 
 ```bash
-python -m pytest
+uv sync
+uv run pytest
 ```

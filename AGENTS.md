@@ -2,7 +2,7 @@
 
 ## Rules
 
-- After editing any `.py` file, run `ruff check <file>` to catch lint issues. Run `ruff check .` and `python -m pytest` to verify changes across the codebase.
+- After editing any `.py` file, run `uv run ruff check <file>` to catch lint issues. Run `uv run ruff check .` and `uv run pytest` to verify changes across the codebase. If the virtualenv is missing, run `uv sync` first.
 - Use `rich` (`rich.console.Console`, `rich.table.Table`, `rich.panel.Panel`, `rich.text.Text`) for all user-facing CLI logs, status messages, table outputs, and error/warning prompts to maintain vibrant, high-contrast, structured styling across terminal outputs.
 - All output must be human-readable if it is to be read by a user.
 - Write a cute BANZAI! message after all tests pass. NEVER HARDCODE THIS. Ensure kaomojis do not use `\(` or `\$` to prevent triggering KaTeX/LaTeX math syntax errors.
