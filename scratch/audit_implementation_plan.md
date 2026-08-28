@@ -175,3 +175,32 @@ Refactor `get_pulse_fn` in `pulses/__init__.py` to iterate a dict of mode → la
 | `display._format_time_string` is imported by tests (Phase 2) | Keep a compat re-export in `display.py` so tests keep green; retarget tests at `timer` before removing. |
 | Test suite couples to `__main__` internals (F7) | Phases 2/4 introduce a `Clock` and move logic; add `clock`-driven tests incrementally so old patches can be retired gradually, not all at once. |
 | Glyph-width regression | Phase 2 explicitly runs glyph-width/countdown/countup display tests; glyph width features cover every digit size. |
+
+---
+
+## Part 5 — Execution Ratification (completed 2026-08-28)
+
+All 9 phases (0-8) executed to completion. Final gate: `just check` exit 0 ·
+`ruff check .` clean · `ruff format --check .` clean · **177 tests passing**
+(up from 176 baseline) · coverage **79.02%** (≥ `fail_under=60`).
+`__main__.py` reduced **954 → 545 lines** (~43%).
+
+| Phase | Exit criteria | Status |
+|-------|---------------|--------|
+| 0 | Baseline numbers recorded, no code changed | ✅ 176 pass, 0 lint, ~77% cov |
+| 1 | Single `validate_anim_mode` source of truth | ✅ canonicalized in `pulses/__init__.py`, `config.py` re-exports |
+| 2 | One `_format_time_string` + shared centering padding | ✅ `timer.py` canonical, `display.py` compat re-export |
+| 3 | `centered_frame` / `print_full_screen` padding agree | ✅ `test_display_centering.py` invariance lock |
+| 4 | Loop body out of `__main__` | ✅ `loop.py` + `clock.py` (`STDCLOCK`) |
+| 5 | Schedule CLI presentation out of `__main__` | ✅ `schedules_cli.py` |
+| 6 | Registry-driven pulse dispatch, lazy import kept | ✅ `_PULSE_LOADERS` dict |
+| 7 | Dead code gone, coverage ≥ 60% | ✅ legacy `build_wave_renderable` API removed |
+| 8 | `just check` green end-to-end | ✅ (installed `just` 1.58.0; `pwsh` shell added to justfile) |
+
+**Implementation deviations from plan (semantics preserved):**
+- Phase 4 moved the loop into a dedicated `src/countdown/loop.py` (not `timer.py` as originally drafted); `Clock`/`SystemClock` live in `src/countdown/clock.py`. Meets F1/F9 intent (loop no longer in `__main__`, clock-injectable).
+- Phase 5 extracted schedule presentation to `src/countdown/schedules_cli.py` (matches the plan's suggested name).
+- `rich_pulse.feature` / `test_rich_pulse.py` had already been migrated to exercise `rich.style_lines` (not `build_wave_renderable`), so the Phase 7 legacy API was confirmed unreferenced dead code; `pulses/rich.py` remains in the coverage omit list.
+- `just` was not present; installed via `cargo install just` (v1.58.0) and added `set shell := ["pwsh", ...]` to `justfile` so `just check` runs on Windows.
+
+Committed as `649e5bc`.
