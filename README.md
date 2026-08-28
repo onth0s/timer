@@ -177,15 +177,21 @@ timer schedule -4:40PM standup
 Relative durations (`25m`, `2d1h30m`) and dash-prefixed clock times
 (`-23:45`, `-4:40PM`) both work; the dash is only for target clock times.
 
-### Checking in
+### Live view & checking in
+
+`timer schedule` (and `timer schedule list`) open the **live ticking view**:
+the stack is rendered as a full table whose `Remaining` column counts down in
+place every second, flipping rows to `Timeout!` as they expire. Exit with any
+key, `q`, `Esc`, or `Ctrl+C`; a summary line always confirms what you watched.
 
 ```bash
-timer schedule               # same as `timer schedule list`
-timer schedule list          # FILO stack: newest first, # column selects it
-timer schedule list --now    # accepted; lists are already a static snapshot
+timer schedule               # live ticking stack (any key to exit)
+timer schedule list          # same live view
+timer schedule --now         # static snapshot of the stack
+timer schedule list --now    # same one-shot snapshot
 timer schedule 1             # full-screen big timer for that row
 timer schedule pomodoro      # by alias
-timer schedule 1 --now       # one-shot status panel instead of the big timer
+timer schedule 1 --now       # status panel instead of the big timer
 timer schedule 1 --expand    # explicit: run the big timer (default for check-in)
 timer schedule 1h x -e       # add "x", then immediately launch its big timer
 ```

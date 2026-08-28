@@ -513,13 +513,11 @@ def load_store() -> ScheduleStore:
         raise click.UsageError(str(exc)) from exc
 
 
-def render_schedule_list(store):
-    """Render the FILO schedule stack as a rich table."""
-    from rich.console import Console
+def _schedule_table(store, now):
+    """Build the FILO schedule stack as a rich table at a given clock time."""
     from rich.table import Table
     from rich.text import Text
 
-    now = time()
     table = Table(
         title=f"Schedules ({len(store)})",
         border_style="cyan",
@@ -544,11 +542,16 @@ def render_schedule_list(store):
         else:
             alias_cell = Text("null", style="dim italic")
         table.add_row(str(position), remaining_cell, due_cell, alias_cell)
+    return table
+
+
+def render_schedule_list(store):
+    """Render the FILO schedule stack as a static rich table."""
+    from rich.console import Console
+    from rich.panel import Panel
 
     console = Console()
     if len(store) == 0:
-        from rich.panel import Panel
-
         console.print(
             Panel(
                 "No schedules yet - add one with e.g. [bold]timer schedule 1h[/bold] "
@@ -559,7 +562,52 @@ def render_schedule_list(store):
             )
         )
         return
-    console.print(table)
+    console.print(_schedule_table(store, time()))
+
+
+def render_schedule_live(store):
+    """Render the schedule stack as a live table that ticks down in place.
+
+    Remaining times refresh every second and rows flip to ``Timeout!`` as their
+    deadlines pass. Press any key (or Ctrl+C) to exit; a summary line is always
+    printed so the view never ends silently.
+    """
+    from rich.console import Console
+    from rich.live import Live
+    from rich.text import Text
+
+    console = Console()
+    if len(store) == 0:
+        render_schedule_list(store)
+        return
+
+    started = time()
+    try:
+        with Live(
+            _schedule_table(store, started),
+            console=console,
+            screen=False,
+            auto_refresh=False,
+        ) as live:
+            while True:
+                live.update(_schedule_table(store, time()))
+                live.refresh()
+                if check_for_keypress():
+                    break
+                sleep(1.0)
+    except KeyboardInterrupt:
+        pass
+    finished = time()
+    timed_out = sum(
+        1 for s in store.ordered() if s.remaining(finished) <= 0
+    )
+    console.print(
+        Text.assemble(
+            ("Stopped schedule live view ", "bold green"),
+            (f"(watched {format_remaining(int(finished - started))}, ", ""),
+            (f"{timed_out} timed out).", ""),
+        )
+    )
 
 
 def add_schedule(store, spec, alias):
@@ -688,23 +736,30 @@ def schedule(ctx):
     """Schedule deadlines that never run in the background. Check in anytime.
 
     A schedule stores only an epoch; nothing ticks between check-ins. Use
-    `timer schedule list` to see the stack, or check in on one by its list
-    number or alias for the full-screen countdown to the deadline.
+    `timer schedule` for the live ticking stack (any key to exit; --now for a
+    static snapshot), or check in on one by its list number or alias for the
+    full-screen countdown to the deadline.
     """
     if ctx.invoked_subcommand is None:
-        render_schedule_list(load_store())
+        render_schedule_live(load_store())
 
 
 @schedule.command(name="list")
 @click.option(
     "--now",
     is_flag=True,
-    help="Print the listing once. Lists are already a static snapshot; "
-    "accepted for symmetry with check-in --now.",
+    help="Print the listing once as a static snapshot instead of the live view.",
 )
 def schedule_list(now):
-    """List all schedules, newest first, with selection numbers."""
-    render_schedule_list(load_store())
+    """List all schedules, newest first, with selection numbers.
+
+    Defaults to the live view: remaining times tick down every second in
+    place. Pass --now for a one-shot static snapshot.
+    """
+    if now:
+        render_schedule_list(load_store())
+    else:
+        render_schedule_live(load_store())
 
 
 @schedule.command()
@@ -787,7 +842,7 @@ def schedule_at(now, expand, args):
     - `timer schedule -23:45 [alias]`        add a clock-time deadline
     - `timer schedule 1h x --expand, -e`     add, then launch the big timer
     - `timer schedule <NUMBER|ALIAS>`        check in (big timer; --now static)
-    - `timer schedule`                       same as `timer schedule list`
+    - `timer schedule`                       live ticking stack (--now static)
     """
     if now and expand:
         raise click.UsageError("--now and --expand are mutually exclusive.")
@@ -795,6 +850,10 @@ def schedule_at(now, expand, args):
     args = list(args)
 
     if not args:
+        if expand:
+            raise click.UsageError(
+                "Nothing to expand. Pass a NUMBER, ALIAS, or DURATION."
+            )
         render_schedule_list(store)
         return
 

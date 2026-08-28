@@ -14,7 +14,7 @@ from countdown.schedule import (
     format_remaining,
     wall_clock,
 )
-from tests.conftest import FakeClock
+from tests.conftest import FakeClock, MockKeys
 
 NOW = 1_700_000_000.0
 
@@ -40,6 +40,13 @@ def sched(tmp_path, monkeypatch):
 def run(sched, *args, **kwargs):
     """Invoke `timer schedule <args...>`."""
     return sched.runner.invoke(main, ["schedule", *args], **kwargs)
+
+
+def patch_live_keys(sched, monkeypatch, at=2.0):
+    """Exit the live view when the fake clock advances ``at`` seconds."""
+    keys = MockKeys(sched.clock)
+    keys.queue_at(sched.clock.t + at, "q")
+    monkeypatch.setattr("countdown.__main__.check_for_keypress", keys.check)
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +137,7 @@ def test_filo_newest_first(sched):
 def test_list_newest_first(sched):
     run(sched, "1h", "aaa")
     run(sched, "2h", "bbb")
-    out = run(sched, "list").output
+    out = run(sched, "list", "--now").output
     assert out.index("bbb") < out.index("aaa")
 
 
@@ -193,7 +200,7 @@ def test_animated_checkin_uses_remaining(sched, monkeypatch):
 def test_timeout_mark_in_list(sched):
     run(sched, "5m", "short")
     sched.clock.t += 400
-    out = run(sched, "list").output
+    out = run(sched, "list", "--now").output
     assert "Timeout!" in out
 
 
@@ -350,7 +357,7 @@ def test_list_now_accepted(sched):
 def test_list_unnamed_has_no_fake_alias(sched):
     run(sched, "90m")
     run(sched, "90m", "named")
-    out = run(sched, "list").output
+    out = run(sched, "list", "--now").output
     assert "named" in out
     assert "90m" not in out
     assert "null" in out
@@ -383,6 +390,76 @@ def test_load_rejects_duplicate_alias(sched):
     )
     with pytest.raises(ValueError, match="Duplicate alias"):
         ScheduleStore.load()
+
+
+# ---------------------------------------------------------------------------
+# Live ticking view
+# ---------------------------------------------------------------------------
+
+
+def test_bare_schedule_ticks_live(sched, monkeypatch):
+    run(sched, "5m", "x")
+    patch_live_keys(sched, monkeypatch, at=2.0)
+    res = run(sched)
+    assert res.exit_code == 0, res.output
+    assert "4m58s" in res.output
+    assert "Stopped schedule live view" in res.output
+    assert "(watched 2s, 0 timed out)." in res.output
+
+
+def test_list_defaults_to_live(sched, monkeypatch):
+    run(sched, "5m", "x")
+    patch_live_keys(sched, monkeypatch, at=0.0)
+    res = run(sched, "list")
+    assert res.exit_code == 0, res.output
+    assert "Stopped schedule live view" in res.output
+
+
+def test_list_now_is_static_snapshot(sched):
+    run(sched, "5m", "x")
+    res = run(sched, "list", "--now")
+    assert res.exit_code == 0, res.output
+    assert "Stopped schedule live view" not in res.output
+
+
+def test_live_timeout_transition(sched, monkeypatch):
+    run(sched, "5m", "x")
+    patch_live_keys(sched, monkeypatch, at=0.0)
+    sched.clock.t += 300
+    res = run(sched, "list")
+    assert res.exit_code == 0, res.output
+    assert "Timeout!" in res.output
+    assert "(watched 0s, 1 timed out)." in res.output
+
+
+def test_live_empty_store_is_static(sched):
+    res = run(sched)
+    assert res.exit_code == 0, res.output
+    assert "No schedules yet" in res.output
+    assert "Stopped schedule live view" not in res.output
+
+
+def test_live_keyboard_interrupt(sched, monkeypatch):
+    run(sched, "5m", "x")
+    sched.clock.raise_at(NOW + 2.0, KeyboardInterrupt())
+    res = run(sched, "list")
+    assert res.exit_code == 0, res.output
+    assert "Stopped schedule live view" in res.output
+    assert "(watched 2s, 0 timed out)." in res.output
+
+
+def test_bare_now_static(sched):
+    run(sched, "5m", "x")
+    res = run(sched, "--now")
+    assert res.exit_code == 0, res.output
+    assert "Stopped schedule live view" not in res.output
+
+
+def test_bare_expand_nothing(sched):
+    run(sched, "5m", "x")
+    res = run(sched, "--expand")
+    assert res.exit_code != 0
+    assert "Nothing to expand" in res.output
 
 
 # ---------------------------------------------------------------------------
