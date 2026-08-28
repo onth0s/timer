@@ -353,6 +353,7 @@ def test_list_unnamed_has_no_fake_alias(sched):
     out = run(sched, "list").output
     assert "named" in out
     assert "90m" not in out
+    assert "null" in out
 
 
 def test_add_feedback_shows_path_and_number(sched):

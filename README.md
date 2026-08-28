@@ -196,8 +196,8 @@ When the deadline has passed, the row is marked `Timeout!` in the list; a
 check-in still runs the big timer at `00:00` with the pulse (static notice
 only under `--now`).
 
-Unnamed schedules leave the Alias column blank — pick them by their `#`.
-Every operation prints a clear message naming what happened, the position,
+Unnamed schedules show an italic `null` in the Alias column — pick them by their
+`#`. Every operation prints a clear message naming what happened, the position,
 and which `timer.yaml` was touched — nothing happens silently.
 
 ### Removing

@@ -542,7 +542,7 @@ def render_schedule_list(store):
         if schedule.alias:
             alias_cell = Text(schedule.alias, style="bold bright_cyan")
         else:
-            alias_cell = Text("", style="dim")
+            alias_cell = Text("null", style="dim italic")
         table.add_row(str(position), remaining_cell, due_cell, alias_cell)
 
     console = Console()
