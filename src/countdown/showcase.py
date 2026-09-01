@@ -2,12 +2,15 @@
 
 Each mode gets ``interval`` seconds to play, then we switch to the next.
 Exits on q keypress or Ctrl+C. asciimatics runs as a separate screen segment
-(via exit-and-restart) since its Screen.wrapper owns the terminal.
+(once per cycle, via exit-and-restart) since its Screen.wrapper owns the
+terminal. Modes whose optional animation library is not installed are skipped.
 """
 
 import random
 from collections.abc import Callable
 from time import sleep, time
+
+from rich.console import Console
 
 from .display import (
     CLEAR,
@@ -20,9 +23,16 @@ from .pulses import (
     SHOWCASE_MODES,
     get_showcase_builder,
     get_showcase_resetter,
+    is_mode_available,
 )
-from .pulses.asciimatics import pulse_asciimatics_timed
 from .terminal import check_for_keypress, restore_terminal, setup_terminal
+
+_STDERR = Console(stderr=True)
+
+
+def _available_showcase_modes() -> list[str]:
+    """Return SHOWCASE_MODES whose animation backend is importable."""
+    return [mode for mode in SHOWCASE_MODES if is_mode_available(mode)]
 
 
 def _showcase_parts(
@@ -64,6 +74,11 @@ def run_showcase(interval: float, shuffle: bool, once: bool):
     """Cycle through pulse animations, switching every ``interval`` seconds."""
     from . import display as display_mod
 
+    available = _available_showcase_modes()
+    has_asciimatics = is_mode_available("asciimatics")
+    if not has_asciimatics:
+        _STDERR.print("[yellow]asciimatics not installed: skipping its segment[/yellow]")
+
     display_mod.enable_ansi_escape_codes()
     old_settings = setup_terminal()
     print(ENABLE_ALT_BUFFER + HIDE_CURSOR, end="")
@@ -75,23 +90,17 @@ def run_showcase(interval: float, shuffle: bool, once: bool):
         zero_lines = timer_mod.get_number_lines(0, get_chars_for_terminal(0))
         iteration = 0
         while True:
-            order = list(SHOWCASE_MODES)
+            order = list(available)
             if shuffle:
                 random.shuffle(order)
 
             for mode in order:
-                if mode == "asciimatics":
-                    # asciimatics owns its own screen; segment with exit-and-restart
-                    if not _render_asciimatics_segment(zero_lines, interval):
-                        return
-                    continue
-
                 if not _render_segment(mode, zero_lines, interval):
                     return
 
-            # asciimatics last; segment with exit-and-restart
-            if not _render_asciimatics_segment(zero_lines, interval):
-                return
+            if has_asciimatics:
+                if not _render_asciimatics_segment(zero_lines, interval):
+                    return
 
             iteration += 1
             if once:
@@ -107,6 +116,8 @@ def _render_asciimatics_segment(
     lines: list[str], interval: float
 ) -> bool:
     """Run asciimatics for its own bounded segment."""
+    from .pulses.asciimatics import pulse_asciimatics_timed
+
     if check_for_keypress():
         return False
     pulse_asciimatics_timed(lines, interval)
