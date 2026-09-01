@@ -139,6 +139,23 @@ def enable_ansi_escape_codes() -> None:  # pragma: no cover
         )
 
 
+def reconfigure_stdout_utf8() -> None:
+    r"""Reconfigure stdout (and stderr) to UTF-8 so glyphs always encode.
+
+    The Windows console defaults to the active code page (e.g. cp1252), which
+    cannot encode the block/shading glyphs used by pulse animations
+    (``\u2588`` etc.). Forcing UTF-8 bytes preserves every character whether
+    the console is a real TTY or a redirected pipe.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if stream is None:
+            continue
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def get_required_width(
     chars: dict[str, str], time_string: str, *, show_hours: bool = False
 ) -> int:
@@ -244,6 +261,7 @@ __all__ = [
     "get_terminal_size",
     "horizontal_padding",
     "print_full_screen",
+    "reconfigure_stdout_utf8",
     "strip_ansi",
     "vertical_padding",
     "visual_width",

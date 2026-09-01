@@ -51,39 +51,17 @@ def _load_module(name: str):
     return import_module(f".{name}", __name__)
 
 
-def is_mode_available(name: str) -> bool:
-    """Return True if the ``name`` pulse module can be imported here.
-
-    Optional animation backends (asciimatics, drawille, ghostprint, smooth)
-    are not hard runtime dependencies, so their modes may be missing from the
-    installed environment. Callers degrade gracefully instead of crashing.
-    """
-    try:
-        _load_module(name)
-        return True
-    except ModuleNotFoundError:
-        return False
-
-
 def get_pulse_fn(name: str) -> Callable[[list[str]], None]:
     """Return the pulse function for ``name``.
 
     Raises ``ValueError`` with a list of valid modes if ``name`` is unknown.
-    Raises ``ValueError`` with a setup hint if the animation backend library
-    for a valid mode is not installed. Imports are lazy so unused libraries
-    don't slow startup.
+    Imports are lazy so unused libraries don't slow startup.
     """
     spec = _PULSE_SPECS.get(name)
     if spec is None:
         valid = ", ".join(VALID_ANIM_MODES)
         raise ValueError(f"Invalid anim mode: {name!r}. Valid modes: {valid}")
-    try:
-        return getattr(_load_module(name), spec["pulse"])
-    except ModuleNotFoundError as exc:
-        raise ValueError(
-            f"Cannot use anim mode {name!r}: its animation library is not "
-            f"installed ({exc.name})."
-        ) from exc
+    return getattr(_load_module(name), spec["pulse"])
 
 
 def get_showcase_builder(name: str) -> Callable[[list[str], float], str]:
@@ -117,6 +95,5 @@ __all__ = [
     "get_pulse_fn",
     "get_showcase_builder",
     "get_showcase_resetter",
-    "is_mode_available",
     "validate_anim_mode",
 ]

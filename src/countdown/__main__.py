@@ -79,6 +79,9 @@ run_countdown._original = run_countdown  # type: ignore[attr-defined]
 @click.pass_context
 def main(ctx):
     """Countdown timer for the terminal with configurable pulse animations."""
+    from .display import reconfigure_stdout_utf8
+
+    reconfigure_stdout_utf8()
     if ctx.invoked_subcommand is None:
         # Default bare 'timer' execution to count-up mode
         try:

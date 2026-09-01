@@ -689,48 +689,48 @@ name = "timer"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "asciimatics" },
     { name = "click" },
     { name = "colorama" },
+    { name = "drawille" },
+    { name = "ghostprint" },
     { name = "pyyaml" },
     { name = "rich" },
     { name = "rich-click" },
+    { name = "smooth-text-animation" },
+    { name = "windows-curses", marker = "sys_platform == 'win32'" },
 ]
 
 [package.dev-dependencies]
 dev = [
-    { name = "asciimatics" },
     { name = "coverage", extra = ["toml"] },
-    { name = "drawille" },
-    { name = "ghostprint" },
     { name = "pytest" },
     { name = "pytest-bdd" },
     { name = "pytest-cov" },
     { name = "ruff" },
-    { name = "smooth-text-animation" },
-    { name = "windows-curses" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "asciimatics", specifier = ">=1.15.0" },
     { name = "click", specifier = ">=8.3.0" },
     { name = "colorama", specifier = ">=0.4.6" },
+    { name = "drawille", specifier = ">=0.2.0" },
+    { name = "ghostprint", specifier = ">=2.0.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=14.0.0" },
     { name = "rich-click", specifier = ">=1.9.0" },
+    { name = "smooth-text-animation", specifier = ">=0.1.2" },
+    { name = "windows-curses", marker = "sys_platform == 'win32'", specifier = ">=2.4.0" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "asciimatics", specifier = ">=1.15.0" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.5.1" },
-    { name = "drawille", specifier = ">=0.2.0" },
-    { name = "ghostprint", specifier = ">=2.0.0" },
     { name = "pytest", specifier = ">=8.2.0" },
     { name = "pytest-bdd", specifier = ">=7.0.0" },
     { name = "pytest-cov", specifier = ">=5.0.0" },
     { name = "ruff", specifier = ">=0.4.0" },
-    { name = "smooth-text-animation", specifier = ">=0.1.2" },
-    { name = "windows-curses", specifier = ">=2.4.0" },
 ]
 
 [[package]]
