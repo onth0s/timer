@@ -1,13 +1,14 @@
 """Utilities for generating large digits."""
 
+from collections.abc import Iterator
 from importlib.resources import files
 from itertools import zip_longest
 
-DIGIT_SIZES = []
-CHARS_BY_SIZE = {}
+DIGIT_SIZES: list[int] = []
+CHARS_BY_SIZE: dict[int, dict[str, str]] = {}
 
 
-def paragraphs(lines):
+def paragraphs(lines: list[str]) -> Iterator[list[str]]:
     """Return groups of non-blank lines."""
     group = []
     for line in lines:
@@ -19,17 +20,17 @@ def paragraphs(lines):
     yield group
 
 
-def transpose(lines):
+def transpose(lines: list[str]) -> Iterator[str]:
     """Transpose a list of strings (columns become rows)."""
     return ("".join(column) for column in zip_longest(*lines, fillvalue=" "))
 
 
-def center(text, width):
+def center(text: str, width: int) -> str:
     """Center text so that each line will have the given width."""
     return "\n".join(f"{line:^{width}}" for line in text.splitlines())
 
 
-def populate_constants():
+def populate_constants() -> None:
     """Populate CHARS_BY_SIZE and DIGIT_SIZES from glyphs.txt."""
     lines = (
         files("countdown")
@@ -64,3 +65,12 @@ def populate_constants():
 
 
 populate_constants()
+
+__all__ = [
+    "CHARS_BY_SIZE",
+    "DIGIT_SIZES",
+    "center",
+    "paragraphs",
+    "populate_constants",
+    "transpose",
+]

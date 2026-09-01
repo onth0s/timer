@@ -9,57 +9,9 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from tests.conftest import FakeClock, MockKeys
+from tests.helpers import run_loop_mocked
 
 scenarios("countdown_loop.feature")
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _run_countdown_mocked(
-    total_seconds, clock, keys, monkeypatch, *, max_pulses=0
-):
-    """Run run_countdown with every OS-touching call replaced by mocks.
-
-    Returns the list of integers that were 'displayed' during the loop.
-    """
-    displayed: list[int] = []
-
-    monkeypatch.setattr("countdown.loop.STDCLOCK", clock)
-    monkeypatch.setattr(
-        "countdown.timer.get_number_lines",
-        lambda s, _chars, **kw: [str(int(s))],
-    )
-    monkeypatch.setattr(
-        "countdown.loop.get_chars_for_terminal",
-        lambda *a, **kw: {},
-    )
-    monkeypatch.setattr(
-        "countdown.loop.print_full_screen",
-        lambda lines, **kw: displayed.append(int(lines[0])),
-    )
-    monkeypatch.setattr("countdown.loop.check_for_keypress", keys.check)
-    monkeypatch.setattr("countdown.loop.read_key", keys.read)
-    monkeypatch.setattr("countdown.loop.drain_keypresses", lambda: None)
-    monkeypatch.setattr("countdown.loop.setup_terminal", lambda: None)
-    monkeypatch.setattr("countdown.loop.restore_terminal", lambda s: None)
-    monkeypatch.setattr("countdown.loop.enable_ansi_escape_codes", lambda: None)
-
-    from unittest.mock import patch
-
-    from countdown.__main__ import run_countdown
-
-    null_pulse = lambda lines: None  # noqa: E731
-    with patch("builtins.print"):  # suppress ANSI escape codes
-        run_countdown(
-            total_seconds,
-            pulse_fn=null_pulse,
-            max_pulses=max_pulses,
-        )
-
-    return displayed
 
 
 # ---------------------------------------------------------------------------
@@ -70,11 +22,6 @@ def _run_countdown_mocked(
 @pytest.fixture
 def clock():
     return FakeClock()
-
-
-@pytest.fixture
-def ctx():
-    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -113,8 +60,8 @@ def given_countdown_seconds(seconds, clock):
 
 @when("the countdown loop runs to completion")
 def when_countdown_runs(ctx, monkeypatch):
-    ctx["displayed"] = _run_countdown_mocked(
-        ctx["total"], ctx["clock"], ctx["keys"], monkeypatch
+    ctx["displayed"] = run_loop_mocked(
+        ctx["clock"], ctx["keys"], monkeypatch, total_seconds=ctx["total"]
     )
 
 
@@ -148,8 +95,8 @@ def given_keypress_at_second(ctx, key, n):
 
 @when("the countdown loop runs")
 def when_countdown_runs_interrupted(ctx, monkeypatch):
-    ctx["displayed"] = _run_countdown_mocked(
-        ctx["total"], ctx["clock"], ctx["keys"], monkeypatch
+    ctx["displayed"] = run_loop_mocked(
+        ctx["clock"], ctx["keys"], monkeypatch, total_seconds=ctx["total"]
     )
 
 

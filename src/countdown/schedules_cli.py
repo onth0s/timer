@@ -11,10 +11,14 @@ from __future__ import annotations
 from time import sleep, time
 
 import click
+from rich.console import Console
+from rich.live import Live
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
 
 from . import timer
-from .config import Config
-from .pulses import get_pulse_fn
+from .config import resolve_pulse
 from .schedule import ScheduleStore, format_remaining, wall_clock
 from .terminal import check_for_keypress
 
@@ -29,9 +33,6 @@ def load_store() -> ScheduleStore:
 
 def _schedule_table(store, now):
     """Build the FILO schedule stack as a rich table at a given clock time."""
-    from rich.table import Table
-    from rich.text import Text
-
     table = Table(
         title=f"Schedules ({len(store)})",
         border_style="cyan",
@@ -61,9 +62,6 @@ def _schedule_table(store, now):
 
 def render_schedule_list(store):
     """Render the FILO schedule stack as a static rich table."""
-    from rich.console import Console
-    from rich.panel import Panel
-
     console = Console()
     if len(store) == 0:
         console.print(
@@ -86,10 +84,6 @@ def render_schedule_live(store):
     deadlines pass. Press any key (or Ctrl+C) to exit; a summary line is always
     printed so the view never ends silently.
     """
-    from rich.console import Console
-    from rich.live import Live
-    from rich.text import Text
-
     console = Console()
     if len(store) == 0:
         render_schedule_list(store)
@@ -138,9 +132,6 @@ def add_schedule(store, spec, alias):
         raise click.UsageError(str(exc)) from exc
     store.save()
 
-    from rich.console import Console
-    from rich.text import Text
-
     message = Text.assemble(
         ("Scheduled ", "bold green"),
         (schedule.alias or schedule.spec, "bold white"),
@@ -153,15 +144,22 @@ def add_schedule(store, spec, alias):
     return schedule
 
 
-def check_schedule(schedule, *, now_flag, position=None):
+def check_schedule(schedule, *, now_flag, position=None, run_timer=None):
     """Check in on a schedule: big-timer countdown, or a one-shot ``--now``.
 
     Expired schedules still launch the big timer (00:00 + pulse) unless
     ``--now`` was passed; no code path is ever silent.
+
+    Args:
+        schedule: The ``Schedule`` to check in on.
+        now_flag: If True, print a static status panel instead of the timer.
+        position: Stack position (for display labels).
+        run_timer: Callable(total_seconds, **kwargs) launching the big timer.
+            Defaults to ``countdown.loop.run_countdown``; the Click tree passes
+            its own wrapper so tests can stub the entry point in one place.
     """
-    from rich.console import Console
-    from rich.panel import Panel
-    from rich.text import Text
+    if run_timer is None:
+        from .loop import run_countdown as run_timer
 
     now = time()
     remaining = schedule.remaining(now)
@@ -169,10 +167,8 @@ def check_schedule(schedule, *, now_flag, position=None):
     tag = f"#{position} " if position else ""
     console = Console()
 
-    config = Config.load()
     try:
-        mode = config.get("anim") or "rich"
-        pulse_fn = get_pulse_fn(mode)
+        pulse_fn = resolve_pulse()
     except ValueError as exc:
         raise click.UsageError(str(exc)) from exc
 
@@ -200,9 +196,7 @@ def check_schedule(schedule, *, now_flag, position=None):
                 ("- running 00:00, press q to exit.", ""),
             )
         )
-        from .__main__ import run_countdown
-
-        run_countdown(
+        run_timer(
             0,
             pulse_fn=pulse_fn,
             show_hours=False,
@@ -236,9 +230,7 @@ def check_schedule(schedule, *, now_flag, position=None):
             (f"due {wall_clock(schedule.due)}", "dim"),
         )
     )
-    from .__main__ import run_countdown
-
-    run_countdown(
+    run_timer(
         int(remaining),
         pulse_fn=pulse_fn,
         show_hours=remaining >= 3600,

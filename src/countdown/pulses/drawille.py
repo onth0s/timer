@@ -5,11 +5,11 @@ creating a proper visible wave pattern. Renders one frame per call.
 """
 
 import math
-from time import time
 
 from drawille import Canvas
 
-from ..display import FULL_CLEAR_HOME, HOME, get_terminal_size
+from ..display import get_terminal_size
+from .base import make_pulse
 
 
 def _glyph_to_pixels(lines):
@@ -33,9 +33,6 @@ def _get_base_pixels(lines):
     if key not in _BASE_PIXELS_CACHE:
         _BASE_PIXELS_CACHE[key] = _glyph_to_pixels(lines)
     return _BASE_PIXELS_CACHE[key]
-
-
-_START = [None]
 
 
 def _render_braille(lines, phase):
@@ -73,7 +70,7 @@ def _centered_braille_frame(rows, glyph_lines):
     return centered_frame(visible_rows, term_width, term_height)
 
 
-def build_frame(lines, phase):
+def build_frame(lines: list[str], phase: float) -> str:
     """Render braille frame with pixels displaced by interfering sine waves.
 
     Returns the centered frame as a string (no CLEAR prefix, no HOME suffix).
@@ -81,16 +78,9 @@ def build_frame(lines, phase):
     return _centered_braille_frame(_render_braille(lines, phase), lines)
 
 
-def pulse_drawille(lines):
-    """Render one frame: pixels displaced by interfering sine waves."""
-    if _START[0] is None:
-        _START[0] = time()
-    phase = time() - _START[0]
-    print(
-        FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end=""
-    )
+pulse_drawille, reset_state = make_pulse(
+    build_frame,
+    doc="Render one frame: pixels displaced by interfering sine waves.",
+)
 
-
-def reset_state():
-    """Reset pulse phase (for tests)."""
-    _START[0] = None
+__all__ = ["build_frame", "pulse_drawille", "reset_state"]

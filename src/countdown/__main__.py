@@ -1,13 +1,22 @@
 """Command-line interface."""
 
-import difflib
+from collections.abc import Callable
 
 import click
 import rich_click  # noqa: F401 — patches Click for Rich-styled --help
+from rich.console import Console
+from rich.table import Table
+from rich.text import Text
 
 from . import timer
-from .config import Config
-from .pulses import VALID_ANIM_MODES, get_pulse_fn
+from .cli import (
+    RunCommand,
+    ScheduleAtCommand,
+    ScheduleGroup,
+    SmartGroup,
+)
+from .config import Config, resolve_pulse
+from .pulses import VALID_ANIM_MODES
 from .schedule import wall_clock
 from .schedules_cli import (
     add_schedule,
@@ -23,15 +32,15 @@ rich_click.STYLE_HELPTEXT = ""
 
 
 def run_countdown(
-    total_seconds,
-    pulse_fn=None,
-    max_pulses=None,
+    total_seconds: int | None,
+    pulse_fn: Callable[[list[str]], None] | None = None,
+    max_pulses: int | None = None,
     *,
-    show_hours=False,
-    count_up=False,
-    raw_seconds=False,
-    dur_str=None,
-):
+    show_hours: bool = False,
+    count_up: bool = False,
+    raw_seconds: bool = False,
+    dur_str: str | None = None,
+) -> None:
     """Run the countdown or count-up timer.
 
     Thin adapter over :func:`countdown.loop.run_countdown`, which owns the
@@ -65,123 +74,6 @@ def run_countdown(
 run_countdown._original = run_countdown  # type: ignore[attr-defined]
 
 
-# ====================================================================
-# Click subcommands
-# ====================================================================
-
-
-def _fix_dash_args(cmd: click.Command, args: list[str]) -> list[str]:
-    """Insert '--' before positional arguments starting with '-' that aren't recognized options."""
-    if not args or "--" in args:
-        return args
-
-    opt_names = set()
-    for param in cmd.params:
-        if isinstance(param, click.Option):
-            opt_names.update(param.opts)
-            opt_names.update(param.secondary_opts)
-    opt_names.update({"-h", "--help"})
-
-    new_args = []
-    i = 0
-    while i < len(args):
-        arg = args[i]
-        if arg.startswith("-") and arg not in opt_names:
-            new_args.append("--")
-            new_args.extend(args[i:])
-            return new_args
-
-        new_args.append(arg)
-        for param in cmd.params:
-            if isinstance(param, click.Option) and (
-                arg in param.opts or arg in param.secondary_opts
-            ):
-                if not param.is_flag and i + 1 < len(args):
-                    i += 1
-                    new_args.append(args[i])
-                break
-        i += 1
-
-    return new_args
-
-
-def _is_duration_token(token: str) -> bool:
-    """Return True if ``token`` parses as a timer duration."""
-    try:
-        timer.duration(token)
-    except ValueError:
-        return False
-    return True
-
-
-def _command_suggestions(token: str, commands: dict) -> list[str]:
-    """Return close command-name matches for ``token``, capped at 3."""
-    return difflib.get_close_matches(token, commands, n=3, cutoff=0.5)
-
-
-def _resolve_typo_command(token: str, commands: dict) -> str | None:
-    """Return the command ``token`` most likely means, or None.
-
-    Only non-duration tokens that fuzzy-match a command name are resolved, so
-    `timer 5` / `timer -4:40PM` still count as durations (routed to ``run``)
-    while `timer sch` -- which is *not* a duration -- dispatches to
-    ``schedule``.
-    """
-    if _is_duration_token(token):
-        return None
-    suggestions = _command_suggestions(token, commands)
-    if not suggestions:
-        return None
-    return suggestions[0]
-
-
-class RunCommand(click.Command):
-    """Command subclass for `run` that pre-processes dash-prefixed duration arguments."""
-
-    def parse_args(self, ctx, args):
-        """Pre-process dash-prefixed positional arguments before Click option parsing."""
-        fixed_args = _fix_dash_args(self, args)
-        return super().parse_args(ctx, fixed_args)
-
-
-class SmartGroup(click.Group):
-    """Group that forwards unmatched positional args to a matching subcommand.
-
-    Lets ``timer 5`` / ``timer -4:40PM`` work as aliases for ``timer run ...``,
-    and routes ambiguous spellings like ``timer sch`` straight to ``schedule``.
-    """
-
-    def _route(self, args):
-        """Return subcommand-prefixed args for an unknown leading token, or None."""
-        first = args[0]
-        target = _resolve_typo_command(first, self.commands)
-        if target:
-            return [target] + list(args[1:])
-        if "run" in self.commands:
-            fixed_args = _fix_dash_args(self.commands["run"], args)
-            return ["run"] + fixed_args
-        return None
-
-    def parse_args(self, ctx, args):
-        """Forward non-subcommand arguments to a matching subcommand."""
-        if args:
-            first = args[0]
-            group_opts = {"-h", "--help", "--version"}
-            if first not in self.commands and first not in group_opts:
-                routed = self._route(args)
-                if routed is not None:
-                    return super().parse_args(ctx, routed)
-        return super().parse_args(ctx, args)
-
-    def resolve_command(self, ctx, args):
-        """Route non-subcommand positional args to a matching subcommand."""
-        if args and args[0] not in self.commands:
-            routed = self._route(args)
-            if routed is not None:
-                return routed[0], self.commands[routed[0]], routed[1:]
-        return super().resolve_command(ctx, args)
-
-
 @click.group(invoke_without_command=True, cls=SmartGroup)
 @click.version_option(package_name="timer")
 @click.pass_context
@@ -189,10 +81,8 @@ def main(ctx):
     """Countdown timer for the terminal with configurable pulse animations."""
     if ctx.invoked_subcommand is None:
         # Default bare 'timer' execution to count-up mode
-        config = Config.load()
         try:
-            mode = config.get("anim") or "rich"
-            pulse_fn = get_pulse_fn(mode)
+            pulse_fn = resolve_pulse()
         except ValueError as exc:
             raise click.UsageError(str(exc)) from exc
         run_countdown(0, pulse_fn=pulse_fn, count_up=True)
@@ -220,10 +110,8 @@ def countdown(anim, raw, duration):
     """
     from . import timer as timer_mod
 
-    config = Config.load()
     try:
-        mode = anim if anim is not None else config.get("anim") or "rich"
-        pulse_fn = get_pulse_fn(mode)
+        pulse_fn = resolve_pulse(anim)
     except ValueError as exc:
         raise click.UsageError(str(exc)) from exc
 
@@ -289,9 +177,6 @@ def init():
 @config.command()
 def show():
     """Show current resolved configuration."""
-    from rich.console import Console
-    from rich.table import Table
-
     cfg = Config.load()
     table = Table(title=f"Config ({Config.path})")
     table.add_column("Key", style="cyan", no_wrap=True)
@@ -332,41 +217,6 @@ def anim(mode):
 # ====================================================================
 
 
-class ScheduleGroup(click.Group):
-    """Group that routes non-subcommand tokens to the catch-all ``at`` command.
-
-    Protects dash-prefixed target times (e.g. ``-23:45``) from Click's option
-    parser, mirroring how ``SmartGroup`` forwards to ``run``.
-    """
-
-    def parse_args(self, ctx, args):
-        """Rewrite unrecognized first tokens into the catch-all command."""
-        if args:
-            first = args[0]
-            group_opts = {"-h", "--help"}
-            if first not in self.commands and first not in group_opts:
-                at_cmd = self.commands.get("at")
-                if at_cmd:
-                    fixed_args = _fix_dash_args(at_cmd, args)
-                    return super().parse_args(ctx, ["at"] + fixed_args)
-        return super().parse_args(ctx, args)
-
-    def resolve_command(self, ctx, args):
-        """Route non-subcommand tokens to the catch-all command."""
-        if args and args[0] not in self.commands:
-            return "at", self.commands["at"], args
-        return super().resolve_command(ctx, args)
-
-
-class ScheduleAtCommand(click.Command):
-    """Catch-all command whose dash-prefixed positionals survive Click."""
-
-    def parse_args(self, ctx, args):
-        """Re-protect dash-prefixed positionals (idempotent)."""
-        fixed_args = _fix_dash_args(self, args)
-        return super().parse_args(ctx, fixed_args)
-
-
 @main.group(cls=ScheduleGroup, invoke_without_command=True)
 @click.pass_context
 def schedule(ctx):
@@ -405,14 +255,11 @@ def nuke():
     store = load_store()
     count = len(store)
     if count == 0:
-        from rich.console import Console
-
         Console().print("[bold yellow]No schedules to remove.[/bold yellow]")
         return
     if click.confirm(f"Remove all {count} schedules?", abort=True):
         store.clear()
         store.save()
-        from rich.console import Console
 
         Console().print(
             f"[bold green]Removed all {count} schedules[/bold green] "
@@ -442,8 +289,6 @@ def rm(target):
     label = schedule.alias or schedule.spec
     store.remove(schedule)
     store.save()
-    from rich.console import Console
-    from rich.text import Text
 
     Console().print(
         Text.assemble(
@@ -503,12 +348,16 @@ def schedule_at(now, expand, args):
                 raise click.UsageError(
                     f"No schedule #{token} - valid range is 1..{len(store)}."
                 )
-            check_schedule(schedule, now_flag=now, position=position)
+            check_schedule(
+                schedule, now_flag=now, position=position, run_timer=run_countdown
+            )
             return
         schedule = store.by_alias(token)
         if schedule is not None:
             position = store.ordered().index(schedule) + 1
-            check_schedule(schedule, now_flag=now, position=position)
+            check_schedule(
+                schedule, now_flag=now, position=position, run_timer=run_countdown
+            )
             return
         try:
             timer.duration(token)
@@ -519,7 +368,12 @@ def schedule_at(now, expand, args):
             ) from None
         add_schedule(store, token, None)
         if expand:
-            check_schedule(store.ordered()[0], now_flag=False, position=1)
+            check_schedule(
+                store.ordered()[0],
+                now_flag=False,
+                position=1,
+                run_timer=run_countdown,
+            )
         return
 
     if len(args) > 2:
@@ -528,7 +382,12 @@ def schedule_at(now, expand, args):
         )
     add_schedule(store, args[0], args[1])
     if expand:
-        check_schedule(store.ordered()[0], now_flag=False, position=1)
+        check_schedule(
+            store.ordered()[0],
+            now_flag=False,
+            position=1,
+            run_timer=run_countdown,
+        )
 
 
 @main.command()
@@ -589,6 +448,9 @@ def test():
     from .tests_cmd import run_tests_cmd
 
     run_tests_cmd()
+
+
+__all__ = ["main", "run_countdown"]
 
 
 if __name__ == "__main__":

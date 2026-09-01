@@ -1,26 +1,10 @@
 """BDD step definitions for duration_parsing.feature."""
 
-import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from countdown import timer
 
 scenarios("duration_parsing.feature")
-
-
-# ---------------------------------------------------------------------------
-# Shared context fixture
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def ctx():
-    return {}
-
-
-# ---------------------------------------------------------------------------
-# Steps
-# ---------------------------------------------------------------------------
 
 
 @given(parsers.parse('the duration string "{input}"'), target_fixture="ctx")

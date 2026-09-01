@@ -1,16 +1,10 @@
 """BDD step definitions for config.feature."""
 
-import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from countdown.config import Config
 
 scenarios("config.feature")
-
-
-@pytest.fixture
-def ctx():
-    return {}
 
 
 @given("no config file exists", target_fixture="ctx")

@@ -15,7 +15,7 @@ from countdown._map_viz import (
 from countdown.display import get_terminal_size
 
 
-def run_tests_cmd():
+def run_tests_cmd() -> None:
     """Build and print a centering geometry map for the current terminal.
 
     The map is printed as a raw grid whose width matches the terminal
@@ -37,3 +37,6 @@ def run_tests_cmd():
     console = Console()
     console.out(left + title + right)
     console.out(Text(grid_to_str(grid)))
+
+
+__all__ = ["run_tests_cmd"]

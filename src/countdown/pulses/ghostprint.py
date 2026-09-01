@@ -6,15 +6,16 @@ cells swap to glitch characters per frame to simulate CRT interference.
 
 import math
 import random
-from time import time
 
-from ..display import FULL_CLEAR_HOME, HOME, centered_frame, get_terminal_size
+from ..display import centered_frame, get_terminal_size
+from .base import make_pulse
 
 _GLITCH_CHARS = "\u2588\u2593\u2592\u2591\u2580#@&$%*"
-_START = [None]
 
 
-def style_lines(lines, phase, glitch_rate=0.08):
+def style_lines(
+    lines: list[str], phase: float, glitch_rate: float = 0.08
+) -> list[str]:
     """Return styled copies of ``lines`` with sine-wave brightness + glitches."""
     content_height = len(lines)
     content_widths = [len(line.rstrip()) for line in lines]
@@ -47,7 +48,9 @@ def style_lines(lines, phase, glitch_rate=0.08):
     return body
 
 
-def build_frame(lines, phase, glitch_rate=0.08):
+def build_frame(
+    lines: list[str], phase: float, glitch_rate: float = 0.08
+) -> str:
     """Render glyphs with sine-wave brightness + occasional glitch swaps.
 
     Returns the centered frame as a string (no CLEAR prefix, no HOME suffix).
@@ -60,16 +63,9 @@ def build_frame(lines, phase, glitch_rate=0.08):
     )
 
 
-def pulse_ghostprint(lines):
-    """Render one frame of CRT flicker pulse."""
-    if _START[0] is None:
-        _START[0] = time()
-    phase = time() - _START[0]
-    print(
-        FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end=""
-    )
+pulse_ghostprint, reset_state = make_pulse(
+    build_frame,
+    doc="Render one frame of CRT flicker pulse.",
+)
 
-
-def reset_state():
-    """Reset pulse phase (for tests)."""
-    _START[0] = None
+__all__ = ["build_frame", "pulse_ghostprint", "reset_state", "style_lines"]

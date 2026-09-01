@@ -3,18 +3,22 @@
 Used by both the ``tests`` CLI command and the centering fidelity test suite.
 """
 
+from __future__ import annotations
 
-def make_grid(w, h):
+Grid = list[list[str]]
+
+
+def make_grid(w: int, h: int) -> Grid:
     """Return an empty W×H grid filled with spaces."""
     return [[" " for _ in range(w)] for _ in range(h)]
 
 
-def grid_to_str(grid):
+def grid_to_str(grid: Grid) -> str:
     r"""Dump a grid to a single string (rows joined by ``\\n``)."""
     return "\n".join("".join(row) for row in grid)
 
 
-def write_lines(grid, x, y, lines):
+def write_lines(grid: Grid, x: int, y: int, lines: list[str]) -> None:
     """Blit *lines* (list of str) onto *grid* at top-left (x, y)."""
     h = len(grid)
     w = len(grid[0]) if grid else 0
@@ -26,7 +30,7 @@ def write_lines(grid, x, y, lines):
                 grid[gy][gx] = ch
 
 
-def mark_center(grid, ch="+"):
+def mark_center(grid: Grid, ch: str = "+") -> tuple[int, int]:
     """Place *ch* at the centre of the terminal (defined by grid dimensions)."""
     h = len(grid)
     w = len(grid[0]) if grid else 0
@@ -35,7 +39,7 @@ def mark_center(grid, ch="+"):
     return (cx, cy)
 
 
-def mark_corners(grid, ch="+"):
+def mark_corners(grid: Grid, ch: str = "+") -> None:
     """Place *ch* at the four corners."""
     h = len(grid)
     w = len(grid[0]) if grid else 0
@@ -45,7 +49,7 @@ def mark_corners(grid, ch="+"):
             grid[y][x] = ch
 
 
-def mark_edge_midpoints(grid, ch="+"):
+def mark_edge_midpoints(grid: Grid, ch: str = "+") -> None:
     """Place *ch* at the midpoint of each edge."""
     h = len(grid)
     w = len(grid[0]) if grid else 0
@@ -60,7 +64,9 @@ def mark_edge_midpoints(grid, ch="+"):
             grid[y][x] = ch
 
 
-def mark_quadrant_boundaries(grid, ch_v="│", ch_h="─", ch_cross="┼"):
+def mark_quadrant_boundaries(
+    grid: Grid, ch_v: str = "│", ch_h: str = "─", ch_cross: str = "┼"
+) -> None:
     """Draw quadrant-dividing lines at the centre axes."""
     h = len(grid)
     w = len(grid[0]) if grid else 0
@@ -74,7 +80,7 @@ def mark_quadrant_boundaries(grid, ch_v="│", ch_h="─", ch_cross="┼"):
     grid[cy][cx] = ch_cross
 
 
-def mark_quadrants(grid, size=1):
+def mark_quadrants(grid: Grid, size: int = 1) -> None:
     """Place digits 1-4 at the centre of each quadrant."""
     h = len(grid)
     w = len(grid[0]) if grid else 0
@@ -95,7 +101,7 @@ def mark_quadrants(grid, size=1):
             grid[my][mx] = m
 
 
-def mark_quadrant_corners(grid):
+def mark_quadrant_corners(grid: Grid) -> None:
     """Place ``o`` at each quadrant's inner corners."""
     h = len(grid)
     w = len(grid[0]) if grid else 0
@@ -121,3 +127,16 @@ def mark_quadrant_corners(grid):
     for x, y in corners:
         if 0 <= y < h and 0 <= x < w:
             grid[y][x] = "o"
+
+
+__all__ = [
+    "grid_to_str",
+    "make_grid",
+    "mark_center",
+    "mark_corners",
+    "mark_edge_midpoints",
+    "mark_quadrant_boundaries",
+    "mark_quadrant_corners",
+    "mark_quadrants",
+    "write_lines",
+]

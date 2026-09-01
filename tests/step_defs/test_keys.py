@@ -1,6 +1,5 @@
 """BDD step definitions for keys.feature."""
 
-import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from countdown.keys import get_time_adjustment, is_pause_key, is_time_adjust_key
@@ -20,11 +19,6 @@ _KEY_MAP = {
     "-": "-",
     "esc": "\x1b",
 }
-
-
-@pytest.fixture
-def ctx():
-    return {}
 
 
 @given(parsers.parse("the key {key_label}"), target_fixture="ctx")

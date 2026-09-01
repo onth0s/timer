@@ -6,6 +6,7 @@ Exits on q keypress or Ctrl+C. asciimatics runs as a separate screen segment
 """
 
 import random
+from collections.abc import Callable
 from time import sleep, time
 
 from .display import (
@@ -15,47 +16,34 @@ from .display import (
     HIDE_CURSOR,
     SHOW_CURSOR,
 )
-from .pulses import ansi as ansi_mod
-from .pulses import drawille as drawille_mod
-from .pulses import ghostprint as ghostprint_mod
-from .pulses import rich as rich_mod
-from .pulses import smooth as smooth_mod
-from .pulses.ansi import build_frame as build_ansi
+from .pulses import (
+    SHOWCASE_MODES,
+    get_showcase_builder,
+    get_showcase_resetter,
+)
 from .pulses.asciimatics import pulse_asciimatics_timed
-from .pulses.drawille import build_frame as build_drawille
-from .pulses.ghostprint import build_frame as build_ghostprint
-from .pulses.rich import build_frame as build_rich
-from .pulses.smooth import build_frame as build_smooth
 from .terminal import check_for_keypress, restore_terminal, setup_terminal
 
-# Modes showcase cycles through (alphabetical; asciimatics handled separately)
-SHOWCASE_MODES = ("ansi", "drawille", "ghostprint", "rich", "smooth")
 
-# Each mode's build_frame + reset_state for clean visual between segments
-_BUILDERS = {
-    "ansi": build_ansi,
-    "drawille": build_drawille,
-    "ghostprint": build_ghostprint,
-    "rich": build_rich,
-    "smooth": build_smooth,
-}
-_RESETTERS = {
-    "ansi": ansi_mod.reset_state,
-    "drawille": drawille_mod.reset_state,
-    "ghostprint": ghostprint_mod.reset_state,
-    "rich": rich_mod.reset_state,
-    "smooth": smooth_mod.reset_state,
-}
+def _showcase_parts(
+    mode: str,
+) -> tuple[
+    Callable[[list[str], float], str], Callable[[], None]
+]:
+    """Return ``(build_frame, reset_state)`` for a showcase mode."""
+    return get_showcase_builder(mode), get_showcase_resetter(mode)
 
 
-def _render_segment(mode, lines, interval):
+def _render_segment(
+    mode: str, lines: list[str], interval: float
+) -> bool:
     """Render one mode for ``interval`` seconds, with a top-left label."""
     if check_for_keypress():
         return False
 
-    _RESETTERS[mode]()
+    builder, reset_state = _showcase_parts(mode)
+    reset_state()
     label = mode
-    builder = _BUILDERS[mode]
     mode_start = time()
     while True:
         elapsed = time() - mode_start
@@ -115,7 +103,9 @@ def run_showcase(interval: float, shuffle: bool, once: bool):
         print(SHOW_CURSOR + DISABLE_ALT_BUFFER, end="")
 
 
-def _render_asciimatics_segment(lines, interval):
+def _render_asciimatics_segment(
+    lines: list[str], interval: float
+) -> bool:
     """Run asciimatics for its own bounded segment."""
     if check_for_keypress():
         return False
@@ -126,3 +116,6 @@ def _render_asciimatics_segment(lines, interval):
     enable_ansi_escape_codes()
     print(ENABLE_ALT_BUFFER + HIDE_CURSOR, end="")
     return not check_for_keypress()
+
+
+__all__ = ["run_showcase"]

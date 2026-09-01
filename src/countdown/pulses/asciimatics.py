@@ -110,7 +110,7 @@ def _run_screen(lines, duration, label=None):
     Screen.wrapper(_demo)
 
 
-def pulse_asciimatics(lines):
+def pulse_asciimatics(lines: list[str]) -> None:
     """Render the sine-wave pulse via asciimatics Screen.wrapper.
 
     Runs until the user presses q (up to 30 seconds).
@@ -118,9 +118,16 @@ def pulse_asciimatics(lines):
     _run_screen(lines, duration=30.0)
 
 
-def pulse_asciimatics_timed(lines, duration):
+def pulse_asciimatics_timed(lines: list[str], duration: float) -> None:
     """Run the asciimatics pulse for exactly ``duration`` seconds.
 
     Used by ``timer showcase`` to give asciimatics its own bounded segment.
     """
     _run_screen(lines, duration=duration, label="asciimatics")
+
+
+__all__ = [
+    "SineWaveEffect",
+    "pulse_asciimatics",
+    "pulse_asciimatics_timed",
+]

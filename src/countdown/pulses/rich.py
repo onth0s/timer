@@ -11,12 +11,11 @@ frame pipeline is IDENTICAL to ansi.py / smooth.py:
 """
 
 import math
-from time import time
 
-from ..display import FULL_CLEAR_HOME, HOME, centered_frame, get_terminal_size
+from ..display import centered_frame, get_terminal_size
 from ._wave import hsl_to_rgb, radial_wave
+from .base import make_pulse
 
-_START = [None]
 _RESET = "\033[0m"
 
 
@@ -42,7 +41,7 @@ def _idx_for_cell(x, y, cx, cy, hue):
     return 16 + ri * 36 + gi * 6 + bi
 
 
-def style_lines(lines, phase):
+def style_lines(lines: list[str], phase: float) -> list[str]:
     """Return styled copies of ``lines`` with per-cell 256-colour ANSI escapes.
 
     Consecutive cells with the same colour index share a single ANSI code.
@@ -95,7 +94,7 @@ def style_lines(lines, phase):
     return body
 
 
-def build_frame(lines, phase):
+def build_frame(lines: list[str], phase: float) -> str:
     """Render glyphs with per-cell 256-colour from a radial sine wave.
 
     Returns the centered frame as a string (no CLEAR prefix, no HOME suffix).
@@ -105,16 +104,10 @@ def build_frame(lines, phase):
     return centered_frame(style_lines(lines, phase), term_width, term_height)
 
 
-def pulse_rich(lines):
-    """Render one frame of radial sine-wave pulse. Prints directly to stdout."""
-    if _START[0] is None:
-        _START[0] = time()
-    phase = (time() - _START[0]) * 4
-    print(
-        FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end=""
-    )
+pulse_rich, reset_state = make_pulse(
+    build_frame,
+    phase_scale=4.0,
+    doc="Render one frame of radial sine-wave pulse. Prints directly to stdout.",
+)
 
-
-def reset_state():
-    """Reset pulse phase (for tests)."""
-    _START[0] = None
+__all__ = ["build_frame", "pulse_rich", "reset_state", "style_lines"]

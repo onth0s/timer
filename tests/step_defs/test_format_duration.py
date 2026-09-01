@@ -1,16 +1,10 @@
 """BDD step definitions for format_duration.feature."""
 
-import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from countdown import timer
 
 scenarios("format_duration.feature")
-
-
-@pytest.fixture
-def ctx():
-    return {}
 
 
 @given(

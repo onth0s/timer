@@ -7,6 +7,11 @@ live apart from the Click command tree. Timing goes through a :class:`Clock`
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
+from rich.console import Console
+from rich.panel import Panel
+
 from . import timer as timer_mod
 from .clock import Clock, SystemClock
 from .display import (
@@ -32,8 +37,12 @@ STDCLOCK: Clock = SystemClock()
 
 
 def _render_lines(
-    seconds, *, show_hours=False, count_up=False, raw_seconds=False
-):
+    seconds: int,
+    *,
+    show_hours: bool = False,
+    count_up: bool = False,
+    raw_seconds: bool = False,
+) -> list[str]:
     """Return the glyph lines for ``seconds`` using the terminal-matching font."""
     return timer_mod.get_number_lines(
         seconds,
@@ -45,16 +54,16 @@ def _render_lines(
 
 
 def run_countdown(
-    total_seconds,
-    pulse_fn=None,
-    max_pulses=None,
+    total_seconds: int | None,
+    pulse_fn: Callable[[list[str]], None] | None = None,
+    max_pulses: int | None = None,
     *,
-    show_hours=False,
-    count_up=False,
-    raw_seconds=False,
-    dur_str=None,
+    show_hours: bool = False,
+    count_up: bool = False,
+    raw_seconds: bool = False,
+    dur_str: str | None = None,
     clock: Clock | None = None,
-):
+) -> None:
     """Run the countdown or count-up timer.
 
     Args:
@@ -67,9 +76,6 @@ def run_countdown(
         dur_str: Explicit formatted duration string for summary display.
         clock: Inject a Clock; defaults to :data:`STDCLOCK`.
     """
-    from rich.console import Console
-    from rich.panel import Panel
-
     from .pulses.ansi import pulse_ansi
 
     if pulse_fn is None:
@@ -254,3 +260,6 @@ def run_countdown(
                         expand=False,
                     )
                 )
+
+
+__all__ = ["STDCLOCK", "run_countdown"]

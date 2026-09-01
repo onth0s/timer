@@ -1,4 +1,9 @@
-"""Pulse animation dispatch — selects one of 6 pulse modes."""
+"""Pulse animation registry — selects one of 6 pulse modes.
+
+Each mode maps to a module that optionally exposes a ``build_frame`` /
+``reset_state`` pair for showcase segments, plus a ``pulse`` function for the
+live loop. Imports are lazy so unused libraries don't slow startup.
+"""
 
 from __future__ import annotations
 
@@ -14,25 +19,36 @@ VALID_ANIM_MODES = (
     "asciimatics",
 )
 
+# Modes with a dedicated showcase segment (asciimatics owns the screen and is
+# handled separately). Alphabetical; matches showcase's historical order.
+SHOWCASE_MODES = ("ansi", "drawille", "ghostprint", "rich", "smooth")
 
-def _lazy_pulse(module_name: str, attr: str) -> Callable[[], Callable]:
-    """Return a loader that imports ``attr`` from ``.<module_name>`` on demand."""
-
-    def _load() -> Callable:
-        module = import_module(f".{module_name}", __name__)
-        return getattr(module, attr)
-
-    return _load
-
-
-_PULSE_LOADERS: dict[str, Callable[[], Callable]] = {
-    "ansi": _lazy_pulse("ansi", "pulse_ansi"),
-    "rich": _lazy_pulse("rich", "pulse_rich"),
-    "drawille": _lazy_pulse("drawille", "pulse_drawille"),
-    "smooth": _lazy_pulse("smooth", "pulse_smooth"),
-    "ghostprint": _lazy_pulse("ghostprint", "pulse_ghostprint"),
-    "asciimatics": _lazy_pulse("asciimatics", "pulse_asciimatics"),
+# mode -> attribute names. "builder"/"reset" are None for screen-owned modes.
+_PULSE_SPECS: dict[str, dict[str, str | None]] = {
+    "ansi": {"pulse": "pulse_ansi", "builder": "build_frame", "reset": "reset_state"},
+    "rich": {"pulse": "pulse_rich", "builder": "build_frame", "reset": "reset_state"},
+    "drawille": {
+        "pulse": "pulse_drawille",
+        "builder": "build_frame",
+        "reset": "reset_state",
+    },
+    "smooth": {
+        "pulse": "pulse_smooth",
+        "builder": "build_frame",
+        "reset": "reset_state",
+    },
+    "ghostprint": {
+        "pulse": "pulse_ghostprint",
+        "builder": "build_frame",
+        "reset": "reset_state",
+    },
+    "asciimatics": {"pulse": "pulse_asciimatics", "builder": None, "reset": None},
 }
+
+
+def _load_module(name: str):
+    """Import and return the pulse module for ``name``."""
+    return import_module(f".{name}", __name__)
 
 
 def get_pulse_fn(name: str) -> Callable[[list[str]], None]:
@@ -41,11 +57,29 @@ def get_pulse_fn(name: str) -> Callable[[list[str]], None]:
     Raises ``ValueError`` with a list of valid modes if ``name`` is unknown.
     Imports are lazy so unused libraries don't slow startup.
     """
-    loader = _PULSE_LOADERS.get(name)
-    if loader is None:
+    spec = _PULSE_SPECS.get(name)
+    if spec is None:
         valid = ", ".join(VALID_ANIM_MODES)
         raise ValueError(f"Invalid anim mode: {name!r}. Valid modes: {valid}")
-    return loader()
+    return getattr(_load_module(name), spec["pulse"])
+
+
+def get_showcase_builder(name: str) -> Callable[[list[str], float], str]:
+    """Return the ``build_frame`` callable for a showcase mode."""
+    spec = _PULSE_SPECS.get(name)
+    if spec is None or spec["builder"] is None:
+        valid = ", ".join(SHOWCASE_MODES)
+        raise ValueError(f"Invalid showcase mode: {name!r}. Valid modes: {valid}")
+    return getattr(_load_module(name), spec["builder"])
+
+
+def get_showcase_resetter(name: str) -> Callable[[], None]:
+    """Return the ``reset_state`` callable for a showcase mode."""
+    spec = _PULSE_SPECS.get(name)
+    if spec is None or spec["reset"] is None:
+        valid = ", ".join(SHOWCASE_MODES)
+        raise ValueError(f"Invalid showcase mode: {name!r}. Valid modes: {valid}")
+    return getattr(_load_module(name), spec["reset"])
 
 
 def validate_anim_mode(name: str) -> None:
@@ -56,7 +90,10 @@ def validate_anim_mode(name: str) -> None:
 
 
 __all__ = [
+    "SHOWCASE_MODES",
     "VALID_ANIM_MODES",
     "get_pulse_fn",
+    "get_showcase_builder",
+    "get_showcase_resetter",
     "validate_anim_mode",
 ]

@@ -1,10 +1,13 @@
 """Configuration loader/writer for ./config.yaml with strict validation."""
 
+from __future__ import annotations
+
+from collections.abc import Callable
 from pathlib import Path
 
 import yaml
 
-from .pulses import validate_anim_mode
+from .pulses import get_pulse_fn, validate_anim_mode
 
 
 class Config:
@@ -17,7 +20,7 @@ class Config:
         self._data = dict(data) if data else dict(self.DEFAULT)
 
     @classmethod
-    def load(cls) -> "Config":
+    def load(cls) -> Config:
         """Load from disk. Missing file returns defaults."""
         if not cls.path.exists():
             return cls()
@@ -55,4 +58,15 @@ class Config:
         return dict(self._data)
 
 
-__all__ = ["Config", "validate_anim_mode"]  # re-export from .pulses
+def resolve_pulse(anim_override: str | None = None) -> Callable[[list[str]], None]:
+    """Load config, resolve the anim mode, and return the pulse function.
+
+    If *anim_override* is given it takes precedence over the persisted config.
+    Raises ``click.UsageError``-compatible ``ValueError`` on invalid modes.
+    """
+    cfg = Config.load()
+    mode = anim_override if anim_override is not None else cfg.get("anim") or "rich"
+    return get_pulse_fn(mode)
+
+
+__all__ = ["Config", "resolve_pulse", "validate_anim_mode"]

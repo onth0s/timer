@@ -3,6 +3,7 @@
 import os
 import re
 import sys
+from collections.abc import Iterable
 from shutil import get_terminal_size as _shutil_get_terminal_size
 
 from .digits import CHARS_BY_SIZE, DIGIT_SIZES
@@ -31,7 +32,9 @@ RESET = "\033[0m"
 _ANSI_CSI_RE = re.compile(r"\033\[[\?]?[\d;]*[A-Za-z]")
 
 
-def get_terminal_size(fallback=(80, 24)):
+def get_terminal_size(
+    fallback: tuple[int, int] = (80, 24),
+) -> os.terminal_size:
     """Return the visible window size (not screen buffer).
 
     On Windows ``shutil.get_terminal_size()`` returns the *buffer* size, which
@@ -62,7 +65,7 @@ def get_terminal_size(fallback=(80, 24)):
     return _shutil_get_terminal_size(fallback=fallback)
 
 
-def strip_ansi(text):
+def strip_ansi(text: str) -> str:
     """Return ``text`` with all ANSI CSI escape sequences removed.
 
     Used for measuring the visible width of a styled line so that centering
@@ -71,12 +74,14 @@ def strip_ansi(text):
     return _ANSI_CSI_RE.sub("", text)
 
 
-def visual_width(line):
+def visual_width(line: str) -> int:
     """Return the visible width of ``line`` after stripping ANSI escapes."""
     return len(strip_ansi(line))
 
 
-def horizontal_padding(content_lines, term_width):
+def horizontal_padding(
+    content_lines: Iterable[str], term_width: int
+) -> int:
     """Return spaces to prepend so content_lines sit centered horizontally."""
     if not content_lines:
         return 0
@@ -84,12 +89,17 @@ def horizontal_padding(content_lines, term_width):
     return max(0, (term_width - widest) // 2)
 
 
-def vertical_padding(content_height, term_height):
+def vertical_padding(content_height: int, term_height: int) -> int:
     """Return lines of leading padding so content_height rows sit centered."""
     return max(0, (term_height - content_height) // 2)
 
 
-def centered_frame(content_lines, term_width, term_height, indent=" "):
+def centered_frame(
+    content_lines: list[str],
+    term_width: int,
+    term_height: int,
+    indent: str = " ",
+) -> str:
     r"""Return a single string with content_lines centered on the terminal.
 
     ``content_lines`` is a list of strings (each may contain ANSI escapes).
@@ -111,7 +121,7 @@ def centered_frame(content_lines, term_width, term_height, indent=" "):
     return f"{v_pad}{body}"
 
 
-def enable_ansi_escape_codes():  # pragma: no cover
+def enable_ansi_escape_codes() -> None:  # pragma: no cover
     """If running on Windows, enable ANSI escape codes."""
     if sys.platform == "win32":
         from ctypes import windll
@@ -129,26 +139,9 @@ def enable_ansi_escape_codes():  # pragma: no cover
         )
 
 
-def _format_time_string(
-    seconds, *, show_hours=False, count_up=False, raw_seconds=False
-):
-    """Return the display time string (SS, MM:SS, or HH:MM:SS).
-
-    Compatibility re-export of the canonical helper in ``timer`` (kept so
-    ``tests.step_defs.test_countdown_display`` / ``test_countup_display`` can
-    import it from here).
-    """
-    from . import timer as timer_mod
-
-    return timer_mod._format_time_string(
-        seconds,
-        show_hours=show_hours,
-        count_up=count_up,
-        raw_seconds=raw_seconds,
-    )
-
-
-def get_required_width(chars, time_string, *, show_hours=False):
+def get_required_width(
+    chars: dict[str, str], time_string: str, *, show_hours: bool = False
+) -> int:
     """Calculate the minimum width required to display the given time string.
 
     Returns the actual rendered width by building ``get_number_lines`` and
@@ -162,7 +155,7 @@ def get_required_width(chars, time_string, *, show_hours=False):
     return max(len(line) for line in lines) if lines else 0
 
 
-def _parse_time_string(time_string):
+def _parse_time_string(time_string: str) -> int:
     """Convert an MM:SS or HH:MM:SS string to total seconds."""
     parts = time_string.split(":")
     if len(parts) == 3:
@@ -170,7 +163,9 @@ def _parse_time_string(time_string):
     return int(parts[0]) * 60 + int(parts[1]) if len(parts) == 2 else 0
 
 
-def get_chars_for_terminal(seconds=0, *, show_hours=False):
+def get_chars_for_terminal(
+    seconds: int = 0, *, show_hours: bool = False
+) -> dict[str, str]:
     """Return the largest CHARS dictionary that fits in the current terminal.
 
     Args:
@@ -178,7 +173,11 @@ def get_chars_for_terminal(seconds=0, *, show_hours=False):
         show_hours: If True, measure width for HH:MM:SS instead of MM:SS.
     """
     width, height = get_terminal_size()
-    time_string = _format_time_string(seconds, show_hours=show_hours)
+    from . import timer as timer_mod
+
+    time_string = timer_mod._format_time_string(
+        seconds, show_hours=show_hours
+    )
     for size in DIGIT_SIZES:
         chars = CHARS_BY_SIZE[size]
         required_width = get_required_width(
@@ -193,7 +192,7 @@ def get_chars_for_terminal(seconds=0, *, show_hours=False):
     return CHARS_BY_SIZE[min(DIGIT_SIZES)]
 
 
-def print_full_screen(lines, paused=False):
+def print_full_screen(lines: list[str], paused: bool = False) -> None:
     """Print the given lines centered in the middle of the terminal window."""
     term_width, term_height = get_terminal_size()
 
@@ -223,3 +222,29 @@ def print_full_screen(lines, paused=False):
         padded_text += "\n\n" + pause_padding + pause_text
 
     print(CLEAR + v_pad + padded_text, flush=True, end="")
+
+
+__all__ = [
+    "BRIGHT_WHITE",
+    "CLEAR",
+    "DIM",
+    "DISABLE_ALT_BUFFER",
+    "ENABLE_ALT_BUFFER",
+    "BOLD",
+    "FULL_CLEAR_HOME",
+    "HIDE_CURSOR",
+    "HOME",
+    "INTENSE_MAGENTA",
+    "RESET",
+    "SHOW_CURSOR",
+    "centered_frame",
+    "enable_ansi_escape_codes",
+    "get_chars_for_terminal",
+    "get_required_width",
+    "get_terminal_size",
+    "horizontal_padding",
+    "print_full_screen",
+    "strip_ansi",
+    "vertical_padding",
+    "visual_width",
+]

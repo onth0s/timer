@@ -11,7 +11,7 @@ else:  # pragma: no cover
     from select import select
 
 
-def check_for_keypress():  # pragma: no cover
+def check_for_keypress() -> bool:  # pragma: no cover
     """Check if a key has been pressed (non-blocking)."""
     if not sys.stdin.isatty():
         return False
@@ -21,7 +21,7 @@ def check_for_keypress():  # pragma: no cover
         return select([sys.stdin], [], [], 0)[0]
 
 
-def read_key():  # pragma: no cover
+def read_key() -> str:  # pragma: no cover
     """Read a single keypress."""
     if sys.platform == "win32":
         key = msvcrt.getch()
@@ -34,7 +34,7 @@ def read_key():  # pragma: no cover
     return key
 
 
-def drain_keypresses():  # pragma: no cover
+def drain_keypresses() -> None:  # pragma: no cover
     """Consume all pending keypresses from the input buffer."""
     while check_for_keypress():
         read_key()
@@ -53,8 +53,17 @@ def setup_terminal():  # pragma: no cover
     return None
 
 
-def restore_terminal(old_settings):  # pragma: no cover
+def restore_terminal(old_settings) -> None:  # pragma: no cover
     """Restore terminal settings (Unix only)."""
     if sys.platform != "win32" and old_settings:
         fd = sys.stdin.fileno()
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+
+__all__ = [
+    "check_for_keypress",
+    "drain_keypresses",
+    "read_key",
+    "restore_terminal",
+    "setup_terminal",
+]

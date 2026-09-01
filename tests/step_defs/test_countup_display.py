@@ -1,14 +1,8 @@
 """BDD step definitions for countup_display.feature."""
 
-import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 scenarios("countup_display.feature")
-
-
-@pytest.fixture
-def ctx():
-    return {}
 
 
 @given(
@@ -21,7 +15,7 @@ def given_stopwatch_elapsed(elapsed):
 
 @when("the display renders")
 def when_display_renders(ctx):
-    from countdown.display import _format_time_string
+    from countdown.timer import _format_time_string
 
     ctx["time_str"] = _format_time_string(ctx["elapsed"], count_up=True)
 

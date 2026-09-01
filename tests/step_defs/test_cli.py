@@ -1,6 +1,5 @@
 """BDD step definitions for cli.feature."""
 
-import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from countdown.__main__ import main
@@ -8,11 +7,6 @@ from countdown.config import Config
 from tests.conftest import FakeClock, MockKeys
 
 scenarios("cli.feature")
-
-
-@pytest.fixture
-def ctx():
-    return {}
 
 
 @given(parsers.parse('the CLI is invoked with "{args}"'), target_fixture="ctx")

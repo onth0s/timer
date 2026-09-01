@@ -1,6 +1,5 @@
 """BDD step definitions for glyph_width.feature."""
 
-import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from countdown import timer
@@ -9,11 +8,6 @@ from countdown.digits import CHARS_BY_SIZE, DIGIT_SIZES
 scenarios("glyph_width.feature")
 
 _TEST_CHARS = CHARS_BY_SIZE[min(DIGIT_SIZES)]
-
-
-@pytest.fixture
-def ctx():
-    return {}
 
 
 # ---------------------------------------------------------------------------

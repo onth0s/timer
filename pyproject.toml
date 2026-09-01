@@ -43,7 +43,6 @@ dev = [
     "smooth-text-animation>=0.1.2",
     "ghostprint>=2.0.0",
     "asciimatics>=1.15.0",
-    "pytest-bdd>=7.0.0",
 ]
 
 [tool.pytest.ini_options]

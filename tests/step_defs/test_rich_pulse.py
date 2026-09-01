@@ -1,6 +1,5 @@
 """BDD step definitions for rich_pulse.feature."""
 
-import pytest
 from pytest_bdd import given, scenarios, then, when
 
 from countdown.digits import CHARS_BY_SIZE, DIGIT_SIZES
@@ -12,11 +11,6 @@ scenarios("rich_pulse.feature")
 
 _TEST_CHARS = CHARS_BY_SIZE[min(DIGIT_SIZES)]
 _PHASE = 0.5
-
-
-@pytest.fixture
-def ctx():
-    return {}
 
 
 @given("the zero timer glyph lines", target_fixture="ctx")

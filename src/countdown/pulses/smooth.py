@@ -5,9 +5,9 @@ oscillates smoothly through 3 levels creating a visible breathing pulse.
 """
 
 import math
-from time import time
 
-from ..display import FULL_CLEAR_HOME, HOME, centered_frame, get_terminal_size
+from ..display import centered_frame, get_terminal_size
+from .base import make_pulse
 
 _BRIGHTNESS_STYLES = [
     "\x1b[2m",  # dim
@@ -15,10 +15,9 @@ _BRIGHTNESS_STYLES = [
     "\x1b[1m",  # bold
 ]
 _RESET = "\x1b[0m"
-_START = [None]
 
 
-def style_lines(lines, phase):
+def style_lines(lines: list[str], phase: float) -> list[str]:
     """Return styled copies of ``lines`` with radial-wave brightness per cell."""
     content_height = len(lines)
     content_widths = [len(line.rstrip()) for line in lines]
@@ -43,7 +42,7 @@ def style_lines(lines, phase):
     return body
 
 
-def build_frame(lines, phase):
+def build_frame(lines: list[str], phase: float) -> str:
     """Render glyphs with per-cell brightness from a radial sine wave.
 
     Returns the centered frame as a string (no CLEAR prefix, no HOME suffix).
@@ -52,16 +51,10 @@ def build_frame(lines, phase):
     return centered_frame(style_lines(lines, phase), term_width, term_height)
 
 
-def pulse_smooth(lines):
-    """Render one frame of radial sine-wave pulse."""
-    if _START[0] is None:
-        _START[0] = time()
-    phase = (time() - _START[0]) * 2.5
-    print(
-        FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end=""
-    )
+pulse_smooth, reset_state = make_pulse(
+    build_frame,
+    phase_scale=2.5,
+    doc="Render one frame of radial sine-wave pulse.",
+)
 
-
-def reset_state():
-    """Reset pulse phase (for tests)."""
-    _START[0] = None
+__all__ = ["build_frame", "pulse_smooth", "reset_state", "style_lines"]
