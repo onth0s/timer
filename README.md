@@ -7,6 +7,7 @@ Full-screen terminal countdown timer with stopwatch mode and configurable pulse-
 ```bash
 timer 6m30s        # count down from 6 minutes 30 seconds
 timer               # count up (stopwatch mode)
+timer clock        # full-screen live digital wall clock
 ```
 
 ## Duration & Target Time formats
@@ -144,9 +145,34 @@ Error: Invalid anim mode: 'neon-rave'. Valid modes: ansi, rich, drawille, smooth
 | `timer config show`           | Show resolved config                             |
 | `timer config path`           | Print path to `config.yaml`                      |
 | `timer config anim [MODE]`  | Show or set animation mode              |
+| `timer clock [OPTIONS]`       | Full-screen live digital wall clock              |
 | `timer schedule ...`        | Lightweight deadlines (never run in the background) |
 
+### `timer clock`
+
+Running `timer clock` turns the terminal into a full-screen, live-updating digital wall clock rendered in large ASCII digits:
+
+```bash
+timer clock               # 24h clock with seconds (HH:MM:SS)
+timer clock --no-seconds  # 24h clock without seconds (HH:MM)
+timer clock -12           # 12h clock with AM/PM
+timer clock -d            # display current date below clock
+timer clock --utc         # display UTC time
+```
+
+#### Controls
+
+| Key           | Action                   |
+|---------------|--------------------------|
+| `Space`, `p`  | Pause / resume time      |
+| `s`           | Toggle seconds display   |
+| `t`           | Toggle 12h / 24h format  |
+| `d`           | Toggle date display      |
+| `q`, `Esc`    | Quit and view summary    |
+| `Ctrl+C`      | Quit and view summary    |
+
 ### `timer showcase`
+
 
 Cycles through every pulse animation mode (default 3 seconds each). Useful for comparing animations or just watching them cycle.
 

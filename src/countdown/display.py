@@ -79,9 +79,7 @@ def visual_width(line: str) -> int:
     return len(strip_ansi(line))
 
 
-def horizontal_padding(
-    content_lines: Iterable[str], term_width: int
-) -> int:
+def horizontal_padding(content_lines: Iterable[str], term_width: int) -> int:
     """Return spaces to prepend so content_lines sit centered horizontally."""
     if not content_lines:
         return 0
@@ -192,9 +190,7 @@ def get_chars_for_terminal(
     width, height = get_terminal_size()
     from . import timer as timer_mod
 
-    time_string = timer_mod._format_time_string(
-        seconds, show_hours=show_hours
-    )
+    time_string = timer_mod._format_time_string(seconds, show_hours=show_hours)
     for size in DIGIT_SIZES:
         chars = CHARS_BY_SIZE[size]
         required_width = get_required_width(
@@ -206,6 +202,29 @@ def get_chars_for_terminal(
         if size + padding_needed <= height and required_width <= width:
             return chars
     # If terminal is too small, return the smallest available
+    return CHARS_BY_SIZE[min(DIGIT_SIZES)]
+
+
+def get_clock_chars_for_terminal(
+    time_string: str, extra_height: int = 0
+) -> dict[str, str]:
+    """Return the largest CHARS dictionary that fits time_string in the terminal.
+
+    Args:
+        time_string: Formatted time string, e.g. '14:24:29' or '14:24'.
+        extra_height: Extra vertical lines needed (e.g. for subtitles).
+    """
+    width, height = get_terminal_size()
+    from . import timer as timer_mod
+
+    for size in DIGIT_SIZES:
+        chars = CHARS_BY_SIZE[size]
+        lines = timer_mod.render_time_string_glyphs(time_string, chars)
+        required_width = max(len(line) for line in lines) if lines else 0
+        padding_needed = 0 if size == 3 else 2
+        total_height_needed = size + extra_height + padding_needed
+        if total_height_needed <= height and required_width <= width:
+            return chars
     return CHARS_BY_SIZE[min(DIGIT_SIZES)]
 
 
@@ -257,6 +276,7 @@ __all__ = [
     "centered_frame",
     "enable_ansi_escape_codes",
     "get_chars_for_terminal",
+    "get_clock_chars_for_terminal",
     "get_required_width",
     "get_terminal_size",
     "horizontal_padding",

@@ -74,6 +74,30 @@ def run_countdown(
 run_countdown._original = run_countdown  # type: ignore[attr-defined]
 
 
+def run_clock(
+    *,
+    show_seconds: bool = True,
+    twelve_hour: bool = False,
+    show_date: bool = False,
+    utc: bool = False,
+    clock=None,
+) -> None:
+    """Run the digital terminal wall clock."""
+    from .clock_cmd import run_clock as _clock_cmd_run
+
+    return _clock_cmd_run(
+        show_seconds=show_seconds,
+        twelve_hour=twelve_hour,
+        show_date=show_date,
+        utc=utc,
+        clock=clock,
+    )
+
+
+# Store original on the function for tests to bypass the default wrapper.
+run_clock._original = run_clock  # type: ignore[attr-defined]
+
+
 @click.group(invoke_without_command=True, cls=SmartGroup)
 @click.version_option(package_name="timer")
 @click.pass_context
@@ -352,14 +376,20 @@ def schedule_at(now, expand, args):
                     f"No schedule #{token} - valid range is 1..{len(store)}."
                 )
             check_schedule(
-                schedule, now_flag=now, position=position, run_timer=run_countdown
+                schedule,
+                now_flag=now,
+                position=position,
+                run_timer=run_countdown,
             )
             return
         schedule = store.by_alias(token)
         if schedule is not None:
             position = store.ordered().index(schedule) + 1
             check_schedule(
-                schedule, now_flag=now, position=position, run_timer=run_countdown
+                schedule,
+                now_flag=now,
+                position=position,
+                run_timer=run_countdown,
             )
             return
         try:
@@ -453,7 +483,71 @@ def test():
     run_tests_cmd()
 
 
-__all__ = ["main", "run_countdown"]
+@main.command()
+@click.option(
+    "--seconds/--no-seconds",
+    "-s/-S",
+    "show_seconds",
+    default=True,
+    help="Show or hide seconds (default: show).",
+)
+@click.option(
+    "--twelve",
+    "-12",
+    "twelve_hour",
+    is_flag=True,
+    default=False,
+    help="Use 12-hour clock format with AM/PM.",
+)
+@click.option(
+    "--twenty-four",
+    "-24",
+    "twenty_four_hour",
+    is_flag=True,
+    default=False,
+    help="Use 24-hour clock format (default).",
+)
+@click.option(
+    "--date",
+    "-d",
+    "show_date",
+    is_flag=True,
+    default=False,
+    help="Display the current date below the clock.",
+)
+@click.option(
+    "--utc",
+    is_flag=True,
+    default=False,
+    help="Display UTC time instead of local time.",
+)
+def clock(show_seconds, twelve_hour, twenty_four_hour, show_date, utc):
+    """Run a full-screen digital terminal wall clock.
+
+    Displays current wall-clock time in large ASCII digits that update
+    every second. Press q or Esc to exit.
+
+    Interactive controls:
+      - q, Esc: Quit and display summary
+      - Space, p: Pause / resume clock
+      - s: Toggle seconds display
+      - t: Toggle 12h / 24h format
+      - d: Toggle date display
+    """
+    if twelve_hour and twenty_four_hour:
+        raise click.UsageError(
+            "Cannot specify both --twelve and --twenty-four."
+        )
+
+    run_clock(
+        show_seconds=show_seconds,
+        twelve_hour=twelve_hour,
+        show_date=show_date,
+        utc=utc,
+    )
+
+
+__all__ = ["main", "run_clock", "run_countdown"]
 
 
 if __name__ == "__main__":

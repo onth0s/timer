@@ -16,6 +16,7 @@ __all__ = [
     "format_duration",
     "get_number_lines",
     "needs_prompt",
+    "render_time_string_glyphs",
 ]
 
 
@@ -99,9 +100,7 @@ def _until_wall_time(hours, minutes, seconds, now, string):
     if target_dt <= now:
         target_dt += timedelta(days=1)
     diff_sec = int((target_dt - now).total_seconds())
-    return compact(
-        Duration(total_seconds=diff_sec, components={"s": diff_sec})
-    )
+    return compact(Duration(total_seconds=diff_sec, components={"s": diff_sec}))
 
 
 def _parse_target_clock_12(token, string, now):
@@ -292,7 +291,11 @@ def duration(string, now=None):
                 return result
 
     # Parsing amounts of time (without dash, or fallback after stripping the dash)
-    for parser in (_parse_leading_colon, _parse_colon_duration, _parse_standard):
+    for parser in (
+        _parse_leading_colon,
+        _parse_colon_duration,
+        _parse_standard,
+    ):
         result = parser(clean_str, string)
         if result is not None:
             return result
@@ -358,6 +361,33 @@ def _format_time_string(
     return f"{minutes:02d}:{secs:02d}"
 
 
+def render_time_string_glyphs(
+    time_str: str, chars: dict[str, str]
+) -> list[str]:
+    """Render a time string (digits and colons) into large glyph lines.
+
+    Args:
+        time_str: String consisting of characters from chars (e.g. '14:24:29')
+        chars: Dictionary mapping characters to their multi-line string representations
+
+    Returns:
+        List of strings, one per line of the ASCII art display
+    """
+    if not chars:
+        return []
+    digit_height = len(next(iter(chars.values())).splitlines())
+    lines = [""] * digit_height
+    for j, char in enumerate(time_str):
+        if char not in chars:
+            continue
+        char_lines = chars[char].splitlines()
+        for i, line in enumerate(char_lines):
+            if j > 0:
+                lines[i] += " "
+            lines[i] += line
+    return lines
+
+
 def get_number_lines(
     seconds, chars, *, show_hours=False, count_up=False, raw_seconds=False
 ):
@@ -373,8 +403,6 @@ def get_number_lines(
     Returns:
         List of strings, one per line of the ASCII art display
     """
-    digit_height = len(next(iter(chars.values())).splitlines())
-    lines = [""] * digit_height
     seconds = max(0, int(seconds))
     time = _format_time_string(
         seconds,
@@ -382,13 +410,4 @@ def get_number_lines(
         count_up=count_up,
         raw_seconds=raw_seconds,
     )
-
-    for j, char in enumerate(time):
-        if char not in chars:
-            continue
-        char_lines = chars[char].splitlines()
-        for i, line in enumerate(char_lines):
-            if j > 0:
-                lines[i] += " "
-            lines[i] += line
-    return lines
+    return render_time_string_glyphs(time, chars)
