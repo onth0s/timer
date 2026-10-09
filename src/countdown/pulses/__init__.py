@@ -25,8 +25,16 @@ SHOWCASE_MODES = ("ansi", "drawille", "ghostprint", "rich", "smooth")
 
 # mode -> attribute names. "builder"/"reset" are None for screen-owned modes.
 _PULSE_SPECS: dict[str, dict[str, str | None]] = {
-    "ansi": {"pulse": "pulse_ansi", "builder": "build_frame", "reset": "reset_state"},
-    "rich": {"pulse": "pulse_rich", "builder": "build_frame", "reset": "reset_state"},
+    "ansi": {
+        "pulse": "pulse_ansi",
+        "builder": "build_frame",
+        "reset": "reset_state",
+    },
+    "rich": {
+        "pulse": "pulse_rich",
+        "builder": "build_frame",
+        "reset": "reset_state",
+    },
     "drawille": {
         "pulse": "pulse_drawille",
         "builder": "build_frame",
@@ -42,7 +50,11 @@ _PULSE_SPECS: dict[str, dict[str, str | None]] = {
         "builder": "build_frame",
         "reset": "reset_state",
     },
-    "asciimatics": {"pulse": "pulse_asciimatics", "builder": None, "reset": None},
+    "asciimatics": {
+        "pulse": "pulse_asciimatics",
+        "builder": None,
+        "reset": None,
+    },
 }
 
 
@@ -69,7 +81,9 @@ def get_showcase_builder(name: str) -> Callable[[list[str], float], str]:
     spec = _PULSE_SPECS.get(name)
     if spec is None or spec["builder"] is None:
         valid = ", ".join(SHOWCASE_MODES)
-        raise ValueError(f"Invalid showcase mode: {name!r}. Valid modes: {valid}")
+        raise ValueError(
+            f"Invalid showcase mode: {name!r}. Valid modes: {valid}"
+        )
     return getattr(_load_module(name), spec["builder"])
 
 
@@ -78,7 +92,9 @@ def get_showcase_resetter(name: str) -> Callable[[], None]:
     spec = _PULSE_SPECS.get(name)
     if spec is None or spec["reset"] is None:
         valid = ", ".join(SHOWCASE_MODES)
-        raise ValueError(f"Invalid showcase mode: {name!r}. Valid modes: {valid}")
+        raise ValueError(
+            f"Invalid showcase mode: {name!r}. Valid modes: {valid}"
+        )
     return getattr(_load_module(name), spec["reset"])
 
 

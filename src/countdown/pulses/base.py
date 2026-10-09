@@ -42,7 +42,9 @@ def make_pulse(
             start[0] = time()
         phase = (time() - start[0]) * phase_scale
         print(
-            FULL_CLEAR_HOME + build_frame(lines, phase) + HOME, flush=True, end=""
+            FULL_CLEAR_HOME + build_frame(lines, phase) + HOME,
+            flush=True,
+            end="",
         )
 
     def reset_state() -> None:

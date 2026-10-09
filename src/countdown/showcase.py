@@ -28,16 +28,12 @@ from .terminal import check_for_keypress, restore_terminal, setup_terminal
 
 def _showcase_parts(
     mode: str,
-) -> tuple[
-    Callable[[list[str], float], str], Callable[[], None]
-]:
+) -> tuple[Callable[[list[str], float], str], Callable[[], None]]:
     """Return ``(build_frame, reset_state)`` for a showcase mode."""
     return get_showcase_builder(mode), get_showcase_resetter(mode)
 
 
-def _render_segment(
-    mode: str, lines: list[str], interval: float
-) -> bool:
+def _render_segment(mode: str, lines: list[str], interval: float) -> bool:
     """Render one mode for ``interval`` seconds, with a top-left label."""
     if check_for_keypress():
         return False
@@ -98,9 +94,7 @@ def run_showcase(interval: float, shuffle: bool, once: bool):
         print(SHOW_CURSOR + DISABLE_ALT_BUFFER, end="")
 
 
-def _render_asciimatics_segment(
-    lines: list[str], interval: float
-) -> bool:
+def _render_asciimatics_segment(lines: list[str], interval: float) -> bool:
     """Run asciimatics for its own bounded segment."""
     if check_for_keypress():
         return False

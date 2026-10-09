@@ -58,14 +58,20 @@ class Config:
         return dict(self._data)
 
 
-def resolve_pulse(anim_override: str | None = None) -> Callable[[list[str]], None]:
+def resolve_pulse(
+    anim_override: str | None = None,
+) -> Callable[[list[str]], None]:
     """Load config, resolve the anim mode, and return the pulse function.
 
     If *anim_override* is given it takes precedence over the persisted config.
     Raises ``click.UsageError``-compatible ``ValueError`` on invalid modes.
     """
     cfg = Config.load()
-    mode = anim_override if anim_override is not None else cfg.get("anim") or "rich"
+    mode = (
+        anim_override
+        if anim_override is not None
+        else cfg.get("anim") or "rich"
+    )
     return get_pulse_fn(mode)
 
 

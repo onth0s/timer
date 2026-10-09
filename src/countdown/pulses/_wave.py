@@ -4,7 +4,12 @@ from math import cos, sin, sqrt
 
 
 def radial_wave(
-    x: float, y: float, cx: float, cy: float, phase: float, frequency: float = 0.3
+    x: float,
+    y: float,
+    cx: float,
+    cy: float,
+    phase: float,
+    frequency: float = 0.3,
 ) -> float:
     """Compute sine wave intensity at point (x,y) given phase and center.
 
@@ -38,9 +43,7 @@ def intensity_to_ansi(intensity: float) -> str:
     return "bold"
 
 
-def hsl_to_rgb(
-    h: float, s: float, lightness: float
-) -> tuple[int, int, int]:
+def hsl_to_rgb(h: float, s: float, lightness: float) -> tuple[int, int, int]:
     """Convert HSL (h in 0-360, s/lightness in 0-1) to RGB tuple (0-255)."""
     c = (1 - abs(2 * lightness - 1)) * s
     hp = (h % 360) / 60
