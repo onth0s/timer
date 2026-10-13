@@ -423,6 +423,11 @@ def schedule_at(now, expand, args):
         )
 
 
+# Shorthand alias: `timer sch ...` behaves exactly like `timer schedule ...`.
+# Same Group object, so subcommands and ScheduleGroup catch-all routing apply.
+main.add_command(schedule, "sch")
+
+
 @main.command()
 @click.option(
     "--time",

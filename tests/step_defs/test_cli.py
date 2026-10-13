@@ -209,22 +209,16 @@ def test_raw_flag_option(runner, tmp_path, monkeypatch):
     assert captured_kwargs[-1]["dur_str"] == "300s"
 
 
-def test_unknown_token_dispatches_to_suggested_command(
-    runner, tmp_path, monkeypatch
-):
+def test_sch_alias_routes_to_schedule(runner, tmp_path, monkeypatch):
     p = tmp_path / "config.yaml"
     monkeypatch.setattr(Config, "path", p)
 
     from countdown import __main__ as main_mod
-    from countdown import showcase as showcase_mod
 
     calls = []
 
     def fake_live(store):
         calls.append(("schedule", store))
-
-    def fake_showcase(interval, shuffle, once):
-        calls.append(("showcase", interval, shuffle, once))
 
     monkeypatch.setattr(main_mod, "render_schedule_live", fake_live)
     monkeypatch.setattr(main_mod, "load_store", lambda: "STORE")
@@ -233,10 +227,27 @@ def test_unknown_token_dispatches_to_suggested_command(
     assert res.exit_code == 0, res.output
     assert calls == [("schedule", "STORE")]
 
-    monkeypatch.setattr(showcase_mod, "run_showcase", fake_showcase)
-    res2 = runner.invoke(main, ["show"])
+    res2 = runner.invoke(main, ["schedule"])
     assert res2.exit_code == 0, res2.output
-    assert calls[-1][0] == "showcase"
+    assert calls == [("schedule", "STORE"), ("schedule", "STORE")]
+
+
+def test_near_miss_tokens_do_not_guess_commands(runner, tmp_path, monkeypatch):
+    p = tmp_path / "config.yaml"
+    monkeypatch.setattr(Config, "path", p)
+
+    from countdown import __main__ as main_mod
+
+    def fail_live(store):
+        raise AssertionError("near-miss must not open the schedule view")
+
+    monkeypatch.setattr(main_mod, "render_schedule_live", fail_live)
+    monkeypatch.setattr(main_mod, "load_store", lambda: "STORE")
+
+    for token in ["s", "sc", "sh", "show", "sched"]:
+        res = runner.invoke(main, [token])
+        assert res.exit_code != 0, (token, res.output)
+        assert "Invalid duration" in res.output, (token, res.output)
 
 
 def test_non_duration_unknown_keeps_invalid_duration_error(

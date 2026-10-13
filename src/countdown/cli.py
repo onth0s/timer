@@ -1,13 +1,11 @@
 """Click group/command subclasses and argument-routing helpers.
 
 These live apart from ``__main__`` so the command tree stays focused on
-declaring subcommands while argument munging (dash-prefixed durations,
-typo-tolerant dispatch) is reusable and independently testable.
+declaring subcommands while argument munging (dash-prefixed durations)
+is reusable and independently testable.
 """
 
 from __future__ import annotations
-
-import difflib
 
 import click
 
@@ -63,27 +61,6 @@ def _is_duration_token(token: str) -> bool:
     return True
 
 
-def _command_suggestions(token: str, commands: dict) -> list[str]:
-    """Return close command-name matches for ``token``, capped at 3."""
-    return difflib.get_close_matches(token, commands, n=3, cutoff=0.5)
-
-
-def _resolve_typo_command(token: str, commands: dict) -> str | None:
-    """Return the command ``token`` most likely means, or None.
-
-    Only non-duration tokens that fuzzy-match a command name are resolved, so
-    `timer 5` / `timer -4:40PM` still count as durations (routed to ``run``)
-    while `timer sch` -- which is *not* a duration -- dispatches to
-    ``schedule``.
-    """
-    if _is_duration_token(token):
-        return None
-    suggestions = _command_suggestions(token, commands)
-    if not suggestions:
-        return None
-    return suggestions[0]
-
-
 class RunCommand(click.Command):
     """Command subclass for `run` that pre-processes dash-prefixed duration arguments."""
 
@@ -94,18 +71,17 @@ class RunCommand(click.Command):
 
 
 class SmartGroup(click.Group):
-    """Group that forwards unmatched positional args to a matching subcommand.
+    """Group that forwards unmatched positional args to ``run``.
 
-    Lets ``timer 5`` / ``timer -4:40PM`` work as aliases for ``timer run ...``,
-    and routes ambiguous spellings like ``timer sch`` straight to ``schedule``.
+    Lets ``timer 5`` / ``timer -4:40PM`` work as aliases for
+    ``timer run ...``. Anything else must be an exact subcommand name
+    (``schedule``, its explicit ``sch`` alias, ``showcase``, ...);
+    near-misses like ``s`` / ``sc`` / ``sh`` fall through to ``run``
+    and fail with an invalid-duration error instead of guessing.
     """
 
     def _route(self, args):
-        """Return subcommand-prefixed args for an unknown leading token, or None."""
-        first = args[0]
-        target = _resolve_typo_command(first, self.commands)
-        if target:
-            return [target] + list(args[1:])
+        """Return run-prefixed args for an unknown leading token, or None."""
         if "run" in self.commands:
             fixed_args = _fix_dash_args(self.commands["run"], args)
             return ["run"] + fixed_args
@@ -169,8 +145,6 @@ __all__ = [
     "ScheduleAtCommand",
     "ScheduleGroup",
     "SmartGroup",
-    "_command_suggestions",
     "_fix_dash_args",
     "_is_duration_token",
-    "_resolve_typo_command",
 ]
