@@ -116,7 +116,7 @@ def render_schedule_live(store):
     )
 
 
-def add_schedule(store, spec, alias):
+def add_schedule(store, spec, alias, force=False):
     """Parse ``spec``, append a new schedule, persist, and report clearly."""
     try:
         dur = timer.duration(spec)
@@ -126,7 +126,11 @@ def add_schedule(store, spec, alias):
     now = time()
     try:
         schedule = store.add(
-            due=now + dur.total_seconds, created=now, spec=spec, alias=alias
+            due=now + dur.total_seconds,
+            created=now,
+            spec=spec,
+            alias=alias,
+            force=force,
         )
     except ValueError as exc:
         raise click.UsageError(str(exc)) from exc

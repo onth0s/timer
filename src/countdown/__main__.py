@@ -342,14 +342,22 @@ def rm(target):
     help="Run the full-screen big timer (normally the default for check-in; "
     "with a DURATION it adds first, then immediately launches).",
 )
+@click.option(
+    "--force",
+    "-F",
+    "force",
+    is_flag=True,
+    help="Overwrite an existing schedule that uses the same alias.",
+)
 @click.argument("args", nargs=-1, required=False)
-def schedule_at(now, expand, args):
+def schedule_at(now, expand, force, args):
     r"""Add, list, or check in on a schedule.
 
     \b
     - `timer schedule 1h [alias]`            add a relative deadline
     - `timer schedule -23:45 [alias]`        add a clock-time deadline
     - `timer schedule 1h x --expand, -e`     add, then launch the big timer
+    - `timer schedule 1h x -F`               overwrite an existing "x" alias
     - `timer schedule <NUMBER|ALIAS>`        check in (big timer; --now static)
     - `timer schedule`                       live ticking stack (--now static)
     """
@@ -399,7 +407,7 @@ def schedule_at(now, expand, args):
                 f"Unknown schedule or duration: {token!r}. Use a stack "
                 "NUMBER, an ALIAS, a DURATION (e.g. 25m, 2h), or -HH:MM."
             ) from None
-        add_schedule(store, token, None)
+        add_schedule(store, token, None, force=force)
         if expand:
             check_schedule(
                 store.ordered()[0],
@@ -411,9 +419,10 @@ def schedule_at(now, expand, args):
 
     if len(args) > 2:
         raise click.UsageError(
-            "Expected DURATION [ALIAS] - too many arguments."
+            "Expected DURATION [ALIAS] (optionally -F/--force) "
+            "- too many arguments."
         )
-    add_schedule(store, args[0], args[1])
+    add_schedule(store, args[0], args[1], force=force)
     if expand:
         check_schedule(
             store.ordered()[0],

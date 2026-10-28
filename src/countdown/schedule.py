@@ -142,13 +142,24 @@ class ScheduleStore:
     # -- mutation ---------------------------------------------------------
 
     def add(
-        self, due: float, created: float, spec: str, alias=None
+        self, due: float, created: float, spec: str, alias=None, force=False
     ) -> Schedule:
-        """Append a validated schedule and return it."""
+        """Append a validated schedule and return it.
+
+        When ``alias`` is already in use and ``force`` is False, raise
+        ``ValueError``. When ``force`` is True, the existing schedule with
+        that alias is removed first so the alias stays unique.
+        """
         if alias is not None:
             self._validate_alias(alias)
-            if self.by_alias(alias) is not None:
-                raise ValueError(f"Alias already in use: {alias!r}")
+            existing = self.by_alias(alias)
+            if existing is not None:
+                if not force:
+                    raise ValueError(
+                        f"Alias already in use: {alias!r} "
+                        f"(use -F/--force to overwrite)."
+                    )
+                self.remove(existing)
         schedule = Schedule(due=due, created=created, spec=spec, alias=alias)
         self._schedules.append(schedule)
         return schedule

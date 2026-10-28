@@ -220,6 +220,7 @@ timer schedule pomodoro      # by alias
 timer schedule 1 --now       # status panel instead of the big timer
 timer schedule 1 --expand    # explicit: run the big timer (default for check-in)
 timer schedule 1h x -e       # add "x", then immediately launch its big timer
+timer schedule 1h x -F       # overwrite an existing "x" schedule
 ```
 
 Check-in always runs the full-screen animated countdown (config `anim` mode
@@ -242,7 +243,8 @@ timer schedule nuke          # removes everything after a y/N confirmation
 
 Aliases must not look like numbers, durations, or the reserved words
 `list`/`nuke`/`rm`. Duplicate aliases are rejected when added and when the
-file is loaded (hand-edited `timer.yaml` cannot smuggle collisions).
+file is loaded (hand-edited `timer.yaml` cannot smuggle collisions). Use
+`-F`/`--force` to overwrite an existing alias instead.
 
 ### Storage
 
